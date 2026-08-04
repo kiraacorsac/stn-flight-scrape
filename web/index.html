@@ -152,6 +152,10 @@ const fmtDate = iso => {
   const [y,m,d] = iso.split("-").map(Number);
   return new Date(y, m-1, d).toLocaleDateString("en-GB", { day:"numeric", month:"short" });
 };
+const fmtWeekday = iso => {
+  const [y,m,d] = iso.split("-").map(Number);
+  return new Date(y, m-1, d).toLocaleDateString("en-GB", { weekday:"short" });
+};
 
 // Currency: JSON prices are GBP; convert for display with today's ECB rates.
 const FALLBACK_RATES = { date:"", approx:true, rates:{ GBP:1, EUR:1.17, CZK:28.3 } };
@@ -319,7 +323,8 @@ function renderColumn(S) {
   document.getElementById(`cap2_${S}`).textContent = fd
     ? `${route} · departing ${fmtDate(fd)} ${fd.slice(0,4)}. How its lowest fare moves each time we scrape.`
     : "No data for this selection.";
-  drawChart(`host2_${S}`, `legend2_${S}`, `table2_${S}`, xs2, g2, "Scrape date");
+  // bridge:true — a missing day here means we didn't scrape, not that the fare vanished.
+  drawChart(`host2_${S}`, `legend2_${S}`, `table2_${S}`, xs2, g2, "Scrape date", { bridge:true });
 }
 
 function refreshDepDates(S, leg) {
@@ -345,7 +350,11 @@ function niceRange(min, max) {
   return [lo, hi];
 }
 
-function drawChart(hostId, legendId, tableId, xs, groups, xTitle) {
+// opts.bridge: draw one continuous line across days with no data point instead of
+// breaking it. Used by the price-history chart, where a missing calendar day means
+// "no scrape ran", not "no fare existed".
+function drawChart(hostId, legendId, tableId, xs, groups, xTitle, opts = {}) {
+  const bridge = !!opts.bridge;
   const host = document.getElementById(hostId);
   host.innerHTML = "";
   const active = new Set(SOURCES.filter(s => groups[s.key] && groups[s.key].size).map(s=>s.key));
@@ -361,8 +370,12 @@ function drawChart(hostId, legendId, tableId, xs, groups, xTitle) {
   const M = { t:14, r:58, b:34, l:54 };
   const iw = W - M.l - M.r, ih = H - M.t - M.b;
 
-  const xIndex = new Map(xs.map((x,i)=>[x,i]));
-  const xAt = x => xs.length===1 ? M.l + iw/2 : M.l + (xIndex.get(x)/(xs.length-1))*iw;
+  // Continuous calendar x-axis: position by actual date, so no-flight days leave a gap.
+  const DAY = 86400000;
+  const dayNum = s => { const [y,m,d]=s.split("-").map(Number); return Math.round(Date.UTC(y,m-1,d)/DAY); };
+  const isoOfDay = dn => { const t=new Date(dn*DAY), p=n=>String(n).padStart(2,"0"); return t.getUTCFullYear()+"-"+p(t.getUTCMonth()+1)+"-"+p(t.getUTCDate()); };
+  const d0 = dayNum(xs[0]), d1 = dayNum(xs[xs.length-1]), span = (d1 - d0) || 1;
+  const xAt = s => xs.length===1 ? M.l + iw/2 : M.l + ((dayNum(s)-d0)/span)*iw;
   let vmin=Infinity, vmax=-Infinity;
   SOURCES.forEach(s => (groups[s.key]||new Map()).forEach(v => { const p=convert(v.price); if(p<vmin)vmin=p; if(p>vmax)vmax=p; }));
   const [ylo, yhi] = niceRange(vmin, vmax);
@@ -381,25 +394,52 @@ function drawChart(hostId, legendId, tableId, xs, groups, xTitle) {
   }
   add("line", {x1:M.l, y1:M.t+ih, x2:M.l+iw, y2:M.t+ih}, "stroke:var(--baseline);stroke-width:1");
 
-  const nT = Math.min(6, xs.length);
+  // Week dividers: a dashed vertical line at the start of each week (Monday).
+  if (xs.length > 1) {
+    for (let dn=d0; dn<=d1; dn++){
+      if (new Date(dn*DAY).getUTCDay()===1){
+        const mx = M.l + ((dn-d0)/span)*iw;
+        add("line", {x1:mx, y1:M.t, x2:mx, y2:M.t+ih}, "stroke:var(--muted);stroke-width:1;stroke-dasharray:3 3;opacity:0.35");
+      }
+    }
+  }
+
+  const nT = xs.length<=1 ? 1 : Math.min(6, span+1);
   for (let i=0;i<nT;i++){
-    const idx = xs.length===1 ? 0 : Math.round(i*(xs.length-1)/(nT-1));
-    const x = xAt(xs[idx]);
+    const dn = xs.length===1 ? d0 : Math.round(d0 + i*span/(nT-1));
+    const x = xs.length===1 ? M.l+iw/2 : M.l + ((dn-d0)/span)*iw;
     const t = add("text", {x, y:M.t+ih+18, "text-anchor":"middle"}, "fill:var(--muted);font-size:11px");
-    t.textContent = fmtDate(xs[idx]);
+    t.textContent = fmtDate(isoOfDay(dn));
   }
 
   SOURCES.forEach(s => {
     if (!active.has(s.key)) return;
     const m = groups[s.key];
-    const pts = xs.filter(x=>m.has(x)).map(x => ({x, px:xAt(x), py:yAt(convert(m.get(x).price))}));
-    if (!pts.length) return;
-    const dAttr = pts.map((p,i)=>(i?"L":"M")+p.px+" "+p.py).join(" ");
-    add("path", {d:dAttr, fill:"none"}, `stroke:var(${s.varName});stroke-width:2;stroke-linejoin:round;stroke-linecap:round`);
-    if (pts.length <= 14) pts.forEach(p => add("circle", {cx:p.px, cy:p.py, r:3.5}, `fill:var(${s.varName})`));
-    const last = pts[pts.length-1];
-    add("circle", {cx:last.px, cy:last.py, r:3.5}, `fill:var(${s.varName})`);
-    const lbl = add("text", {x:last.px+7, y:last.py+3.5}, "fill:var(--text-secondary);font-size:11.5px");
+    const present = xs.filter(x=>m.has(x));
+    if (!present.length) return;
+    const xy = x => ({ px:xAt(x), py:yAt(convert(m.get(x).price)) });
+    // Break the line wherever a calendar day is missing (gap > 1 day).
+    let dAttr = "";
+    present.forEach((x,i) => {
+      const {px,py} = xy(x);
+      const gap = !bridge && i>0 && (dayNum(x)-dayNum(present[i-1]))>1;
+      dAttr += ((i===0||gap) ? "M" : "L") + px + " " + py + " ";
+    });
+    add("path", {d:dAttr.trim(), fill:"none"}, `stroke:var(${s.varName});stroke-width:2;stroke-linejoin:round;stroke-linecap:round`);
+    if (bridge) {
+      // The line now spans un-scraped days, so dot the days we actually observed.
+      present.slice(0,-1).forEach(x => { const {px,py}=xy(x); add("circle", {cx:px, cy:py, r:2.5}, `fill:var(${s.varName})`); });
+    } else {
+      // Markers on isolated single-day flights (no adjacent day either side) so they're visible.
+      present.forEach((x,i) => {
+        const isoL = i===0 || (dayNum(x)-dayNum(present[i-1]))>1;
+        const isoR = i===present.length-1 || (dayNum(present[i+1])-dayNum(x))>1;
+        if (isoL && isoR) { const {px,py}=xy(x); add("circle", {cx:px, cy:py, r:3}, `fill:var(${s.varName})`); }
+      });
+    }
+    const last = present[present.length-1], lp = xy(last);
+    add("circle", {cx:lp.px, cy:lp.py, r:3.5}, `fill:var(${s.varName})`);
+    const lbl = add("text", {x:lp.px+7, y:lp.py+3.5}, "fill:var(--text-secondary);font-size:11.5px");
     lbl.textContent = s.name;
   });
 
@@ -430,7 +470,7 @@ function drawChart(hostId, legendId, tableId, xs, groups, xTitle) {
         hoverDots[si].style.opacity = 0;
       }
     });
-    tip.innerHTML = `<div class="tt-date">${fmtDate(xk)} ${xk.slice(0,4)}</div>${rowsHtml}${metaHtml}`;
+    tip.innerHTML = `<div class="tt-date">${fmtWeekday(xk)} ${fmtDate(xk)} ${xk.slice(0,4)}</div>${rowsHtml}${metaHtml}`;
     tip.style.opacity = 1;
     let tx = (cx/W)*rect.width + 14; if (tx > rect.width-160) tx -= 172;
     tip.style.left = tx + "px";
