@@ -114,7 +114,7 @@
   .tabs button:not([aria-pressed="true"]):hover { color:var(--text-primary); }
 
   /* --- Trip finder --- */
-  .tripgrid { display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:14px; }
+  .tripgrid { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:14px; align-items:start; }
   fieldset.grp { border:1px solid var(--border); border-radius:12px; padding:4px 12px 12px; margin:0; min-width:0; }
   fieldset.grp legend { color:var(--muted); font-size:11.5px; text-transform:uppercase; letter-spacing:0.04em; padding:0 5px; }
   .chips { display:flex; flex-wrap:wrap; gap:7px; }
@@ -132,6 +132,8 @@
     width:80px; background:var(--surface-1); color:var(--text-primary); border:1px solid var(--border);
     border-radius:8px; padding:7px 9px; font-size:14px; font-family:inherit; font-variant-numeric:tabular-nums;
   }
+  .sublabel { color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:0.04em; margin:14px 0 7px; }
+  fieldset.grp > .sublabel:first-of-type { margin-top:2px; }
   .hint { color:var(--muted); font-size:11.5px; margin-top:8px; line-height:1.45; }
   .tablewrap { overflow-x:auto; }
   table.trips { font-size:13px; }
@@ -199,43 +201,38 @@
       </p>
       <div class="tripgrid">
         <fieldset class="grp">
-          <legend>Trip starts</legend>
+          <legend>The trip</legend>
+          <div class="sublabel">Starts</div>
           <div class="segmented" id="basis" role="group" aria-label="Which end the trip starts from">
             <button type="button" data-basis="stn" aria-pressed="true">From STN</button>
             <button type="button" data-basis="city" aria-pressed="false">To STN</button>
           </div>
           <div class="hint">From STN: leave London, come back to it. To STN: leave a city, visit London, fly home.</div>
-        </fieldset>
-        <fieldset class="grp">
-          <legend id="legOut">Fly out STN →</legend>
-          <div class="chips" id="outCities"></div>
-        </fieldset>
-        <fieldset class="grp">
-          <legend id="legIn">Fly back → STN</legend>
-          <div class="chips" id="inCities"></div>
-        </fieldset>
-        <fieldset class="grp">
-          <legend>Leave on</legend>
-          <div class="chips" id="depDows"></div>
-        </fieldset>
-        <fieldset class="grp">
-          <legend>Come back on</legend>
-          <div class="chips" id="retDows"></div>
-        </fieldset>
-        <fieldset class="grp">
-          <legend>Trip length</legend>
+          <div class="sublabel">Length</div>
           <div class="rangerow">
             <label>min days<input type="number" id="minDays" min="0" max="90" step="1" value="2"></label>
             <label>max days<input type="number" id="maxDays" min="0" max="90" step="1" value="5"></label>
           </div>
           <div class="hint">Days between the outbound and the inbound flight — i.e. nights away.</div>
+          <div class="sublabel">Shape</div>
+          <div class="chips">
+            <label class="chip"><input type="checkbox" id="sameCity">Same city both ways</label>
+          </div>
+          <div class="hint">Left off, open-jaw trips are included too — out to one city, back from another.</div>
         </fieldset>
         <fieldset class="grp">
-          <legend>Options</legend>
-          <div class="chips">
-            <label class="chip"><input type="checkbox" id="sameCity" checked>Same city both ways</label>
-          </div>
-          <div class="hint">Untick to also get open-jaw trips — out to one city, back from another.</div>
+          <legend id="legOut">Fly out STN →</legend>
+          <div class="sublabel">Airports</div>
+          <div class="chips" id="outCities"></div>
+          <div class="sublabel">Leave on</div>
+          <div class="chips" id="depDows"></div>
+        </fieldset>
+        <fieldset class="grp">
+          <legend id="legIn">Fly back → STN</legend>
+          <div class="sublabel">Airports</div>
+          <div class="chips" id="inCities"></div>
+          <div class="sublabel">Come back on</div>
+          <div class="chips" id="retDows"></div>
         </fieldset>
       </div>
     </div>

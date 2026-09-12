@@ -95,9 +95,9 @@ A **Trips** tab turns the one-way fares into whole return trips. Pick:
 
 Every combination that fits is listed cheapest first, with both flights' date, time,
 flight number, airline and fare, and the trip total. Prices come from the most recent
-scrape and use the cheapest source (Ryanair or Kiwi) for each leg. **Same city both ways**
-is on by default; untick it to also get open-jaw trips — out to one city, back from
-another. Both dashboards (local and static) have the tab.
+scrape and use the cheapest source (Ryanair or Kiwi) for each leg. Open-jaw trips — out
+to one city, back from another — are included by default; tick **Same city both ways** to
+drop them. Both dashboards (local and static) have the tab.
 
 ### Local vs public dashboard
 
