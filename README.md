@@ -53,26 +53,28 @@ Output is appended to `logs\scrape.log`. Run on demand with
 
 ## Dashboard
 
-A tiny local dashboard visualizes the data live from `flights.db` (no internet or extra
-packages needed):
+`web/index.html` is a self-contained static dashboard — no server, no build step, no
+JavaScript dependencies. It reads pre-built per-city JSON instead of querying the
+database, which is what lets it be hosted for free on GitHub Pages while the scraper
+keeps running on your machine. Build the JSON with `export.py` and preview it with any
+static file server:
 
 ```bash
-python dashboard.py            # then open http://localhost:8000
-python dashboard.py --port 9000
+python export.py                     # rebuild web/data/*.json from flights.db
+python -m http.server -d web 8000    # then open http://localhost:8000
 ```
 
-A **currency toggle** (GBP / EUR / CZK) converts all prices using today's ECB rates,
-fetched once when the server starts (from frankfurter.dev; falls back to approximate
-rates if offline). Prices are stored in GBP and converted on display.
+A **currency toggle** (GBP / EUR / CZK) converts all prices using today's ECB rates
+(fetched from frankfurter.dev when the page loads; falls back to approximate rates if
+offline). Prices are stored in GBP and converted on display.
 
 The page has two tabs: **Prices** (the charts below) and **Trips** (a search for whole
 return trips, described further down).
 
 On the Prices tab, pick a **city** and the page shows both directions side by side in
 two columns — **STN → city** (outbound) on the left, **city → STN** (return) on the
-right. It's
-theme-aware (light/dark) with a toggle, plus KPI tiles (observations, routes, scrapes,
-cheapest fare seen). Each column has two charts:
+right. It's theme-aware (light/dark) with a toggle, plus KPI tiles (observations,
+routes, scrapes, cheapest fare seen). Each column has two charts:
 
 1. **Cheapest fare by departure date** — the lowest direct fare for each date across the
    90-day window, Ryanair vs Kiwi.
@@ -97,16 +99,7 @@ Every combination that fits is listed cheapest first, with both flights' date, t
 flight number, airline and fare, and the trip total. Prices come from the most recent
 scrape and use the cheapest source (Ryanair or Kiwi) for each leg. Open-jaw trips — out
 to one city, back from another — are included by default; tick **Same city both ways** to
-drop them. Both dashboards (local and static) have the tab.
-
-### Local vs public dashboard
-
-- **Local** (`dashboard.py`, above) reads the SQLite file live — best while developing or
-  for a private view on your machine.
-- **Public/static** (`web/index.html` + `export.py`) is a serverless version that reads
-  pre-built per-city JSON, made for free hosting on GitHub Pages. Build the JSON with
-  `python export.py` (writes `web/data/`) and preview it with
-  `python -m http.server -d web 8000`.
+drop them.
 
 ## Deploying for free
 
