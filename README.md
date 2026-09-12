@@ -74,7 +74,7 @@ return trips, described further down).
 On the Prices tab, pick a **city** and the page shows both directions side by side in
 two columns — **STN → city** (outbound) on the left, **city → STN** (return) on the
 right. It's theme-aware (light/dark) with a toggle, plus KPI tiles (observations,
-routes, scrapes, cheapest fare seen). Each column has two charts:
+routes, scrapes, last scraped, cheapest fare seen). Each column has two charts:
 
 1. **Cheapest fare by departure date** — the lowest direct fare for each date across the
    90-day window, Ryanair vs Kiwi.

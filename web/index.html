@@ -259,6 +259,14 @@ const fmtWeekday = iso => {
   const [y,m,d] = iso.split("-").map(Number);
   return new Date(y, m-1, d).toLocaleDateString("en-GB", { weekday:"short" });
 };
+// How stale a date is, in plain words. The data only moves when the scheduled task
+// runs, so "3 days ago" is the quickest way to spot one that has stopped.
+const ageInWords = iso => {
+  const [y,m,d] = iso.split("-").map(Number), now = new Date();
+  const days = Math.round((new Date(now.getFullYear(), now.getMonth(), now.getDate())
+                           - new Date(y, m-1, d)) / 86400000);
+  return days <= 0 ? "today" : days === 1 ? "yesterday" : `${days} days ago`;
+};
 
 // Currency: JSON prices are GBP; convert for display with today's ECB rates.
 const FALLBACK_RATES = { date:"", approx:true, rates:{ GBP:1, EUR:1.17, CZK:28.3 } };
@@ -348,6 +356,8 @@ function buildKpis() {
     { label:"Observations", value:s.rows.toLocaleString() },
     { label:"Routes tracked", value:s.routes },
     { label:"Scrapes so far", value:s.scrapes, note: s.scrapes===1 ? "history grows daily" : "" },
+    { label:"Last scraped", value: fmtDate(SUMMARY.latestScrape),
+      note: ageInWords(SUMMARY.latestScrape) },
     { label:"Cheapest fare seen", value: money(c.price),
       note: `${c.origin}→${c.destination} · ${fmtDate(c.flight_date)} · ${c.airline}` },
   ];
