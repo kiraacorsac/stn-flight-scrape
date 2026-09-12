@@ -123,10 +123,11 @@
   .chip:has(input:checked) input { accent-color:#fff; }
   .rangerow { display:flex; gap:10px; align-items:flex-end; }
   .rangerow label { font-size:12px; color:var(--text-secondary); display:flex; flex-direction:column; gap:4px; }
-  input[type="number"] {
+  input[type="number"], input[type="date"] {
     width:80px; background:var(--surface-1); color:var(--text-primary); border:1px solid var(--border);
     border-radius:8px; padding:7px 9px; font-size:14px; font-family:inherit; font-variant-numeric:tabular-nums;
   }
+  input[type="date"] { width:100%; max-width:150px; }
   .sublabel { color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:0.04em; margin:14px 0 7px; }
   fieldset.grp > .sublabel:first-of-type { margin-top:2px; }
   .hint { color:var(--muted); font-size:11.5px; margin-top:8px; line-height:1.45; }
@@ -195,6 +196,12 @@
             <button type="button" data-basis="city" aria-pressed="false">To STN</button>
           </div>
           <div class="hint">From STN: leave London, come back to it. To STN: leave a city, visit London, fly home.</div>
+          <div class="sublabel">Dates</div>
+          <div class="rangerow">
+            <label>not before<input type="date" id="fromDate"></label>
+            <label>not after<input type="date" id="toDate"></label>
+          </div>
+          <div class="hint">The whole trip has to fall inside this window. Leave either empty for no limit.</div>
           <div class="sublabel">Length</div>
           <div class="rangerow">
             <label>min days<input type="number" id="minDays" min="0" max="90" step="1" value="2"></label>
@@ -621,6 +628,14 @@ function initTrips(cities) {
   document.getElementById("inCities").innerHTML  = cities.map(c => chip("inCity",  c, c, true)).join("");
   document.getElementById("depDows").innerHTML   = DOWS.map(([i,l]) => chip("depDow", i, l, true)).join("");
   document.getElementById("retDows").innerHTML   = DOWS.map(([i,l]) => chip("retDow", i, l, true)).join("");
+  // Bound the pickers to the window the latest scrape covers, so the calendar
+  // cannot offer a date no flight could fall on.
+  const [, lastFlight] = SUMMARY.flightDateRange;
+  ["fromDate", "toDate"].forEach(id => {
+    const el = document.getElementById(id);
+    el.min = latestScrapeDate();
+    el.max = lastFlight;
+  });
   document.getElementById("view-trips").addEventListener("change", renderTrips);
   document.getElementById("view-trips").addEventListener("input", renderTrips);
   setupBasis();
@@ -673,8 +688,11 @@ function tripOptions() {
   const num = id => { const v = parseInt(document.getElementById(id).value, 10); return Number.isFinite(v) ? v : 0; };
   let lo = Math.max(0, num("minDays")), hi = Math.max(0, num("maxDays"));
   if (hi < lo) [lo, hi] = [hi, lo];   // tolerate a min typed above the max
+  let from = document.getElementById("fromDate").value, to = document.getElementById("toDate").value;
+  if (from && to && to < from) [from, to] = [to, from];   // same tolerance as min/max days
   return {
     basis: currentBasis(),
+    from: from || null, to: to || null,
     outCities: checkedValues("outCity"),
     inCities:  checkedValues("inCity"),
     minDays: lo, maxDays: hi,
@@ -694,6 +712,7 @@ function buildTrips(fares, opt) {
     const outMap = fares[outKey];
     if (!outMap) continue;
     for (const [odate, out] of outMap) {
+      if (opt.from && odate < opt.from) continue;
       if (!opt.depDows.has(dowOf(odate))) continue;
       const odn = dayNumber(odate);
       for (const ic of opt.inCities) {
@@ -703,6 +722,7 @@ function buildTrips(fares, opt) {
         if (!inMap) continue;
         for (let n = opt.minDays; n <= opt.maxDays; n++) {
           const rdate = isoFromDay(odn + n);
+          if (opt.to && rdate > opt.to) continue;
           if (!opt.retDows.has(dowOf(rdate))) continue;
           const back = inMap.get(rdate);
           if (!back) continue;
