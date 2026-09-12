@@ -35,20 +35,17 @@
     -webkit-font-smoothing:antialiased;
   }
   .wrap { max-width:1080px; margin:0 auto; padding:28px 20px 64px; }
-  header { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; flex-wrap:wrap; }
-  h1 { font-size:22px; margin:0 0 4px; letter-spacing:-0.01em; }
-  .sub { color:var(--text-secondary); font-size:13.5px; }
+  header { display:flex; align-items:center; justify-content:space-between; gap:14px 22px; flex-wrap:wrap; }
+  .headline { min-width:0; }
+  .headctl { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  h1 { font-size:22px; margin:0; letter-spacing:-0.01em; }
+  .sub { color:var(--text-secondary); font-size:13.5px; line-height:1.65; }
+  #subtitle { margin-top:9px; }
   .theme-btn {
     border:1px solid var(--border); background:var(--surface-1); color:var(--text-secondary);
-    border-radius:8px; padding:7px 12px; font-size:13px; cursor:pointer;
+    border-radius:8px; padding:8px 13px; font-size:13.5px; line-height:1.25; cursor:pointer; font-family:inherit;
   }
   .theme-btn:hover { color:var(--text-primary); }
-
-  .kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin:22px 0 6px; }
-  .tile { background:var(--surface-1); border:1px solid var(--border); border-radius:12px; padding:14px 16px; }
-  .tile .label { color:var(--muted); font-size:11.5px; text-transform:uppercase; letter-spacing:0.04em; }
-  .tile .value { font-size:26px; margin-top:6px; letter-spacing:-0.02em; }
-  .tile .note { color:var(--text-secondary); font-size:12px; margin-top:4px; }
 
   .controls { display:flex; gap:16px; flex-wrap:wrap; align-items:flex-end; margin:26px 0 10px; }
   .ctl label { display:block; font-size:11.5px; color:var(--muted); text-transform:uppercase; letter-spacing:0.04em; margin-bottom:5px; }
@@ -59,7 +56,7 @@
   .segmented { display:inline-flex; border:1px solid var(--border); border-radius:8px; overflow:hidden; }
   .segmented button {
     background:var(--surface-1); color:var(--text-secondary); border:0; border-left:1px solid var(--border);
-    padding:8px 13px; font-size:13.5px; cursor:pointer; font-family:inherit;
+    padding:8px 13px; font-size:13.5px; line-height:1.25; cursor:pointer; font-family:inherit;
   }
   .segmented button:first-child { border-left:0; }
   .segmented button[aria-pressed="true"] { background:var(--series-1); color:#fff; }
@@ -102,10 +99,10 @@
   td.num { text-align:right; }
   .empty { color:var(--text-secondary); font-size:13.5px; padding:26px 4px; }
   /* --- Tabs (Prices / Trips) --- */
-  .tabs { display:inline-flex; border:1px solid var(--border); border-radius:8px; overflow:hidden; margin:24px 0 2px; }
+  .tabs { display:inline-flex; border:1px solid var(--border); border-radius:8px; overflow:hidden; }
   .tabs button {
     background:var(--surface-1); color:var(--text-secondary); border:0; border-left:1px solid var(--border);
-    padding:9px 18px; font-size:14px; cursor:pointer; font-family:inherit;
+    padding:8px 15px; font-size:13.5px; line-height:1.25; cursor:pointer; font-family:inherit;
   }
   .tabs button:first-child { border-left:0; }
   .tabs button[aria-pressed="true"] { background:var(--series-1); color:#fff; }
@@ -146,31 +143,24 @@
 <body>
 <div class="wrap">
   <header>
-    <div>
+    <div class="headline">
       <h1>Flights Price Dashboard</h1>
-      <div class="sub" id="subtitle">Loading…</div>
     </div>
-    <button class="theme-btn" id="themeBtn" type="button">◐ Theme</button>
-  </header>
-
-  <section class="kpis" id="kpis"></section>
-
-  <div class="controls">
-    <div class="ctl">
-      <label>Currency</label>
+    <div class="headctl">
+      <nav class="tabs" id="tabs" role="group" aria-label="View">
+        <button type="button" data-tab="prices" aria-pressed="true">Prices</button>
+        <button type="button" data-tab="trips" aria-pressed="false">Trips</button>
+      </nav>
       <div class="segmented" id="currency" role="group" aria-label="Currency">
         <button type="button" data-ccy="GBP" aria-pressed="true">GBP £</button>
         <button type="button" data-ccy="EUR" aria-pressed="false">EUR €</button>
         <button type="button" data-ccy="CZK" aria-pressed="false">CZK Kč</button>
       </div>
-      <div class="sub" id="fxnote" style="font-size:11.5px;margin-top:5px;color:var(--muted)"></div>
+      <button class="theme-btn" id="themeBtn" type="button">◐ Theme</button>
     </div>
-  </div>
+  </header>
 
-  <nav class="tabs" id="tabs" role="group" aria-label="View">
-    <button type="button" data-tab="prices" aria-pressed="true">Prices</button>
-    <button type="button" data-tab="trips" aria-pressed="false">Trips</button>
-  </nav>
+  <div class="sub" id="subtitle">Loading…</div>
 
   <section id="view-prices">
     <div class="controls">
@@ -302,20 +292,18 @@ async function boot() {
 }
 
 function setupCurrency() {
-  const note = document.getElementById("fxnote");
-  note.textContent = RATES.approx ? "approx rates (offline)" : `ECB rates ${RATES.date}`;
   document.querySelectorAll("#currency button").forEach(btn => {
     btn.addEventListener("click", () => {
       CCY = btn.dataset.ccy;
       document.querySelectorAll("#currency button").forEach(b =>
         b.setAttribute("aria-pressed", String(b === btn)));
-      if (CURRENT) { buildKpis(); render(); renderTrips(); }
+      if (CURRENT) { render(); renderTrips(); }
     });
   });
 }
 
 async function init() {
-  buildKpis();
+  buildSubtitle();
   const sel = document.getElementById("city");
   SUMMARY.cities.forEach(c => { const o=document.createElement("option"); o.value=c; o.textContent=c; sel.appendChild(o); });
   state.city = SUMMARY.cities[0];
@@ -326,11 +314,6 @@ async function init() {
   });
 
   buildColumns();
-
-  const [dmin, dmax] = SUMMARY.flightDateRange;
-  const n = SUMMARY.stats.scrapes;
-  document.getElementById("subtitle").textContent =
-    `${SUMMARY.stats.rows.toLocaleString()} priced observations · flights ${fmtDate(dmin)} – ${fmtDate(dmax)} · ${n} scrape${n>1?"s":""}`;
 
   await loadCity(state.city);
   initTrips(SUMMARY.cities);
@@ -350,21 +333,16 @@ async function loadCity(city) {
   CURRENT = await cityData(city);
 }
 
-function buildKpis() {
-  const s = SUMMARY.stats, c = s.cheapest;
-  const tiles = [
-    { label:"Observations", value:s.rows.toLocaleString() },
-    { label:"Routes tracked", value:s.routes },
-    { label:"Scrapes so far", value:s.scrapes, note: s.scrapes===1 ? "history grows daily" : "" },
-    { label:"Last scraped", value: fmtDate(SUMMARY.latestScrape),
-      note: ageInWords(SUMMARY.latestScrape) },
-    { label:"Cheapest fare seen", value: money(c.price),
-      note: `${c.origin}→${c.destination} · ${fmtDate(c.flight_date)} · ${c.airline}` },
-  ];
-  document.getElementById("kpis").innerHTML = tiles.map(t =>
-    `<div class="tile"><div class="label">${t.label}</div>
-     <div class="value tabular">${t.value}</div>
-     ${t.note ? `<div class="note">${t.note}</div>` : ""}</div>`).join("");
+// Every page-level stat as one line under the title.
+function buildSubtitle() {
+  const s = SUMMARY.stats, [dmin, dmax] = SUMMARY.flightDateRange;
+  document.getElementById("subtitle").textContent = [
+    `${s.rows.toLocaleString()} observed`,
+    `flights ${fmtDate(dmin)} – ${fmtDate(dmax)}`,
+    `${s.scrapes} scrape${s.scrapes > 1 ? "s" : ""}`,
+    `scraped ${fmtDate(SUMMARY.latestScrape)} (${ageInWords(SUMMARY.latestScrape)})`,
+    RATES.approx ? "approx FX rates (offline)" : `ECB rates ${RATES.date}`,
+  ].join(" · ");
 }
 
 function buildColumns() {

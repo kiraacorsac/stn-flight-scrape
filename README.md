@@ -64,17 +64,19 @@ python export.py                     # rebuild web/data/*.json from flights.db
 python -m http.server -d web 8000    # then open http://localhost:8000
 ```
 
-A **currency toggle** (GBP / EUR / CZK) converts all prices using today's ECB rates
-(fetched from frankfurter.dev when the page loads; falls back to approximate rates if
-offline). Prices are stored in GBP and converted on display.
+The header carries the page-level controls — the **Prices / Trips** switch, a **currency
+toggle** (GBP / EUR / CZK) and the theme button. Prices are stored in GBP and converted on
+display using today's ECB rates (fetched from frankfurter.dev when the page loads; falls
+back to approximate rates if offline).
 
 The page has two tabs: **Prices** (the charts below) and **Trips** (a search for whole
 return trips, described further down).
 
 On the Prices tab, pick a **city** and the page shows both directions side by side in
 two columns — **STN → city** (outbound) on the left, **city → STN** (return) on the
-right. It's theme-aware (light/dark) with a toggle, plus KPI tiles (observations,
-routes, scrapes, last scraped, cheapest fare seen). Each column has two charts:
+right. It's theme-aware (light/dark), and the line under the title carries the
+page-level stats: how many observations, the flight-date range, how many scrapes, when
+the last one ran (and how long ago), and the FX rate date. Each column has two charts:
 
 1. **Cheapest fare by departure date** — the lowest direct fare for each date across the
    90-day window, Ryanair vs Kiwi.
