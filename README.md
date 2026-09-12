@@ -65,8 +65,12 @@ A **currency toggle** (GBP / EUR / CZK) converts all prices using today's ECB ra
 fetched once when the server starts (from frankfurter.dev; falls back to approximate
 rates if offline). Prices are stored in GBP and converted on display.
 
-Pick a **city** and the page shows both directions side by side in two columns —
-**STN → city** (outbound) on the left, **city → STN** (return) on the right. It's
+The page has two tabs: **Prices** (the charts below) and **Trips** (a search for whole
+return trips, described further down).
+
+On the Prices tab, pick a **city** and the page shows both directions side by side in
+two columns — **STN → city** (outbound) on the left, **city → STN** (return) on the
+right. It's
 theme-aware (light/dark) with a toggle, plus KPI tiles (observations, routes, scrapes,
 cheapest fare seen). Each column has two charts:
 
@@ -75,6 +79,25 @@ cheapest fare seen). Each column has two charts:
 2. **Price history for one departure date** — how a chosen flight's fare moves across
    successive scrapes. It shows a single point after the first scrape and fills into a
    curve as the daily task accumulates more scrape dates.
+
+### Finding trips
+
+A **Trips** tab turns the one-way fares into whole return trips. Pick:
+
+- **which end the trip starts from** — *From STN* (leave London and come back to it) or
+  *To STN* (leave a city, visit London, fly home), which flips both legs;
+- **which airports** — STN is fixed on the London side; tick any of the four cities to
+  fly out to, and (separately) any to fly back from;
+- **how long the trip is** — a min/max range of days, counted between the outbound and
+  the inbound flight;
+- **which days of week** it starts and ends on — tickboxes for leaving and for coming
+  back.
+
+Every combination that fits is listed cheapest first, with both flights' date, time,
+flight number, airline and fare, and the trip total. Prices come from the most recent
+scrape and use the cheapest source (Ryanair or Kiwi) for each leg. **Same city both ways**
+is on by default; untick it to also get open-jaw trips — out to one city, back from
+another. Both dashboards (local and static) have the tab.
 
 ### Local vs public dashboard
 

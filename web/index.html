@@ -101,6 +101,43 @@
   th { color:var(--muted); font-weight:600; }
   td.num { text-align:right; }
   .empty { color:var(--text-secondary); font-size:13.5px; padding:26px 4px; }
+  /* --- Tabs (Prices / Trips) --- */
+  .tabs { display:inline-flex; border:1px solid var(--border); border-radius:8px; overflow:hidden; margin:24px 0 2px; }
+  .tabs button {
+    background:var(--surface-1); color:var(--text-secondary); border:0; border-left:1px solid var(--border);
+    padding:9px 18px; font-size:14px; cursor:pointer; font-family:inherit;
+  }
+  .tabs button:first-child { border-left:0; }
+  .tabs button[aria-pressed="true"] { background:var(--series-1); color:#fff; }
+  .tabs button:not([aria-pressed="true"]):hover { color:var(--text-primary); }
+
+  /* --- Trip finder --- */
+  .tripgrid { display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:14px; }
+  fieldset.grp { border:1px solid var(--border); border-radius:12px; padding:4px 12px 12px; margin:0; min-width:0; }
+  fieldset.grp legend { color:var(--muted); font-size:11.5px; text-transform:uppercase; letter-spacing:0.04em; padding:0 5px; }
+  .chips { display:flex; flex-wrap:wrap; gap:7px; }
+  .chip {
+    display:inline-flex; align-items:center; gap:7px; cursor:pointer; user-select:none;
+    border:1px solid var(--border); border-radius:999px; padding:5px 11px 5px 9px;
+    background:var(--page); color:var(--text-secondary); font-size:13px;
+  }
+  .chip input { margin:0; accent-color:var(--series-1); }
+  .chip:has(input:checked) { background:var(--series-1); border-color:transparent; color:#fff; }
+  .chip:has(input:checked) input { accent-color:#fff; }
+  .rangerow { display:flex; gap:10px; align-items:flex-end; }
+  .rangerow label { font-size:12px; color:var(--text-secondary); display:flex; flex-direction:column; gap:4px; }
+  input[type="number"] {
+    width:80px; background:var(--surface-1); color:var(--text-primary); border:1px solid var(--border);
+    border-radius:8px; padding:7px 9px; font-size:14px; font-family:inherit; font-variant-numeric:tabular-nums;
+  }
+  .hint { color:var(--muted); font-size:11.5px; margin-top:8px; line-height:1.45; }
+  .tablewrap { overflow-x:auto; }
+  table.trips { font-size:13px; }
+  table.trips td { padding:8px; vertical-align:top; white-space:nowrap; }
+  table.trips td.total { font-size:14px; font-weight:600; color:var(--text-primary); }
+  table.trips tbody tr:hover { background:var(--page); }
+  table.trips .sub2 { display:block; color:var(--muted); font-size:11px; font-weight:400; margin-top:2px; }
+  table.trips .rank { color:var(--muted); }
   .foot { color:var(--muted); font-size:12px; margin-top:26px; line-height:1.55; }
 </style>
 </head>
@@ -118,10 +155,6 @@
 
   <div class="controls">
     <div class="ctl">
-      <label for="city">City</label>
-      <select id="city"></select>
-    </div>
-    <div class="ctl">
       <label>Currency</label>
       <div class="segmented" id="currency" role="group" aria-label="Currency">
         <button type="button" data-ccy="GBP" aria-pressed="true">GBP £</button>
@@ -132,12 +165,85 @@
     </div>
   </div>
 
-  <div class="columns" id="columns"></div>
+  <nav class="tabs" id="tabs" role="group" aria-label="View">
+    <button type="button" data-tab="prices" aria-pressed="true">Prices</button>
+    <button type="button" data-tab="trips" aria-pressed="false">Trips</button>
+  </nav>
 
-  <p class="foot">
-    Prices scraped daily from Ryanair &amp; Kiwi.com and stored append-only, so history
-    grows over time. Data updates once a day. Fares in GBP, converted with ECB rates.
-  </p>
+  <section id="view-prices">
+    <div class="controls">
+      <div class="ctl">
+        <label for="city">City</label>
+        <select id="city"></select>
+      </div>
+    </div>
+
+    <div class="columns" id="columns"></div>
+
+    <p class="foot">
+      Prices scraped daily from Ryanair &amp; Kiwi.com and stored append-only, so history
+      grows over time. Data updates once a day. Fares in GBP, converted with ECB rates.
+    </p>
+  </section>
+
+  <section id="view-trips" hidden>
+    <div class="card">
+      <h2>Find a trip</h2>
+      <p class="cap">
+        Every return trip that fits the filters, built from the latest scrape: the cheapest
+        outbound fare on a matching date plus the cheapest inbound fare the chosen number of
+        days later.
+      </p>
+      <div class="tripgrid">
+        <fieldset class="grp">
+          <legend>Trip starts</legend>
+          <div class="segmented" id="basis" role="group" aria-label="Which end the trip starts from">
+            <button type="button" data-basis="stn" aria-pressed="true">From STN</button>
+            <button type="button" data-basis="city" aria-pressed="false">To STN</button>
+          </div>
+          <div class="hint">From STN: leave London, come back to it. To STN: leave a city, visit London, fly home.</div>
+        </fieldset>
+        <fieldset class="grp">
+          <legend id="legOut">Fly out STN →</legend>
+          <div class="chips" id="outCities"></div>
+        </fieldset>
+        <fieldset class="grp">
+          <legend id="legIn">Fly back → STN</legend>
+          <div class="chips" id="inCities"></div>
+        </fieldset>
+        <fieldset class="grp">
+          <legend>Leave on</legend>
+          <div class="chips" id="depDows"></div>
+        </fieldset>
+        <fieldset class="grp">
+          <legend>Come back on</legend>
+          <div class="chips" id="retDows"></div>
+        </fieldset>
+        <fieldset class="grp">
+          <legend>Trip length</legend>
+          <div class="rangerow">
+            <label>min days<input type="number" id="minDays" min="0" max="90" step="1" value="2"></label>
+            <label>max days<input type="number" id="maxDays" min="0" max="90" step="1" value="5"></label>
+          </div>
+          <div class="hint">Days between the outbound and the inbound flight — i.e. nights away.</div>
+        </fieldset>
+        <fieldset class="grp">
+          <legend>Options</legend>
+          <div class="chips">
+            <label class="chip"><input type="checkbox" id="sameCity" checked>Same city both ways</label>
+          </div>
+          <div class="hint">Untick to also get open-jaw trips — out to one city, back from another.</div>
+        </fieldset>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Matching trips</h2>
+      <p class="cap" id="tripCap">…</p>
+      <div id="tripResults"></div>
+    </div>
+  </section>
+
 </div>
 
 <script>
@@ -198,7 +304,7 @@ function setupCurrency() {
       CCY = btn.dataset.ccy;
       document.querySelectorAll("#currency button").forEach(b =>
         b.setAttribute("aria-pressed", String(b === btn)));
-      if (CURRENT) { buildKpis(); render(); }
+      if (CURRENT) { buildKpis(); render(); renderTrips(); }
     });
   });
 }
@@ -222,15 +328,21 @@ async function init() {
     `${SUMMARY.stats.rows.toLocaleString()} priced observations · flights ${fmtDate(dmin)} – ${fmtDate(dmax)} · ${n} scrape${n>1?"s":""}`;
 
   await loadCity(state.city);
+  initTrips(SUMMARY.cities);
   render();
   window.addEventListener("resize", render);
 }
 
-async function loadCity(city) {
+// Fetch one city's JSON (cached for the page's lifetime).
+async function cityData(city) {
   if (!CITYCACHE[city]) {
     CITYCACHE[city] = await (await fetch(`data/${city}.json`, {cache:"no-store"})).json();
   }
-  CURRENT = CITYCACHE[city];
+  return CITYCACHE[city];
+}
+
+async function loadCity(city) {
+  CURRENT = await cityData(city);
 }
 
 function buildKpis() {
@@ -494,6 +606,218 @@ function buildTable(id, xs, groups, xTitle) {
     return `<tr><td>${fmtDate(x)} ${x.slice(0,4)}</td>${cells}</tr>`;
   }).join("");
   document.getElementById(id).innerHTML = `<table><thead>${head}</thead><tbody>${body}</tbody></table>`;
+}
+
+/* ───────────────────────────── Trip finder ─────────────────────────────
+   Assembles return trips out of the latest scrape: for every outbound date
+   that matches the chosen airports and weekday, look for an inbound fare
+   min..max days later that also matches, add the two cheapest fares up and
+   sort by total. All of it runs over data the page already holds, so the
+   list re-computes instantly as boxes are ticked.                        */
+
+const DAY_MS = 86400000;
+// Monday-first, matching how the weekday tickboxes read. Values are
+// JS getUTCDay() numbers (Sunday = 0).
+const DOWS = [[1,"Mon"],[2,"Tue"],[3,"Wed"],[4,"Thu"],[5,"Fri"],[6,"Sat"],[0,"Sun"]];
+const dayNumber = iso => { const [y,m,d] = iso.split("-").map(Number); return Math.round(Date.UTC(y,m-1,d)/DAY_MS); };
+const isoFromDay = dn => { const t = new Date(dn*DAY_MS), p = n => String(n).padStart(2,"0");
+  return t.getUTCFullYear()+"-"+p(t.getUTCMonth()+1)+"-"+p(t.getUTCDate()); };
+const dowOf = iso => new Date(dayNumber(iso)*DAY_MS).getUTCDay();
+
+// Long lists are dominated by near-identical trips, so only the cheapest
+// slice is drawn; the caption still reports the full match count.
+const MAX_TRIP_ROWS = 200;
+let tripRenderToken = 0;   // guards against a slow fetch finishing out of order
+
+function initTrips(cities) {
+  const chip = (name, val, label, checked) =>
+    `<label class="chip"><input type="checkbox" name="${name}" value="${val}"${checked ? " checked" : ""}>${label}</label>`;
+  document.getElementById("outCities").innerHTML = cities.map(c => chip("outCity", c, c, true)).join("");
+  document.getElementById("inCities").innerHTML  = cities.map(c => chip("inCity",  c, c, true)).join("");
+  document.getElementById("depDows").innerHTML   = DOWS.map(([i,l]) => chip("depDow", i, l, true)).join("");
+  document.getElementById("retDows").innerHTML   = DOWS.map(([i,l]) => chip("retDow", i, l, true)).join("");
+  document.getElementById("view-trips").addEventListener("change", renderTrips);
+  document.getElementById("view-trips").addEventListener("input", renderTrips);
+  setupBasis();
+  setupTabs();
+  renderTrips();
+}
+
+// The From-STN / To-STN switch. Buttons emit no change event, so it wires its own
+// clicks and relabels the two airport pickers to match the direction of travel.
+function setupBasis() {
+  const relabel = () => {
+    const stn = currentBasis() === "stn";
+    document.getElementById("legOut").textContent = stn ? `Fly out ${HUB} →` : `Fly out → ${HUB}`;
+    document.getElementById("legIn").textContent  = stn ? `Fly back → ${HUB}` : `Fly back ${HUB} →`;
+  };
+  document.querySelectorAll("#basis button").forEach(btn => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll("#basis button").forEach(b => b.setAttribute("aria-pressed", String(b === btn)));
+      relabel();
+      renderTrips();
+    });
+  });
+  relabel();
+}
+
+function setupTabs() {
+  document.querySelectorAll("#tabs button").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const tab = btn.dataset.tab;
+      document.querySelectorAll("#tabs button").forEach(b => b.setAttribute("aria-pressed", String(b === btn)));
+      document.getElementById("view-prices").hidden = tab !== "prices";
+      document.getElementById("view-trips").hidden  = tab !== "trips";
+      // Charts size themselves to the host element, which measures 0 while hidden.
+      if (tab === "prices") render();
+    });
+  });
+}
+
+const checkedValues = name =>
+  [...document.querySelectorAll(`#view-trips input[name="${name}"]:checked`)].map(i => i.value);
+
+// Which end of the round trip a city sits on depends on where the trip is based:
+// starting from STN you fly out to the city and back from it; starting at the city
+// it is the mirror image.
+const currentBasis = () => document.querySelector('#basis button[aria-pressed="true"]').dataset.basis;
+const legKey = (basis, half, city) =>
+  (basis === "stn") === (half === "out") ? `${HUB}-${city}` : `${city}-${HUB}`;
+
+function tripOptions() {
+  const num = id => { const v = parseInt(document.getElementById(id).value, 10); return Number.isFinite(v) ? v : 0; };
+  let lo = Math.max(0, num("minDays")), hi = Math.max(0, num("maxDays"));
+  if (hi < lo) [lo, hi] = [hi, lo];   // tolerate a min typed above the max
+  return {
+    basis: currentBasis(),
+    outCities: checkedValues("outCity"),
+    inCities:  checkedValues("inCity"),
+    minDays: lo, maxDays: hi,
+    depDows: new Set(checkedValues("depDow").map(Number)),
+    retDows: new Set(checkedValues("retDow").map(Number)),
+    sameCity: document.getElementById("sameCity").checked,
+  };
+}
+
+// fares: "ORIG-DEST" -> Map(flight_date -> {price, dep, fn, air, src}), cheapest
+// across both sources. Returns the matching trips, cheapest first.
+function buildTrips(fares, opt) {
+  const trips = [];
+  const asRoute = key => key.replace("-", "→");
+  for (const oc of opt.outCities) {
+    const outKey = legKey(opt.basis, "out", oc);
+    const outMap = fares[outKey];
+    if (!outMap) continue;
+    for (const [odate, out] of outMap) {
+      if (!opt.depDows.has(dowOf(odate))) continue;
+      const odn = dayNumber(odate);
+      for (const ic of opt.inCities) {
+        if (opt.sameCity && ic !== oc) continue;
+        const inKey = legKey(opt.basis, "in", ic);
+        const inMap = fares[inKey];
+        if (!inMap) continue;
+        for (let n = opt.minDays; n <= opt.maxDays; n++) {
+          const rdate = isoFromDay(odn + n);
+          if (!opt.retDows.has(dowOf(rdate))) continue;
+          const back = inMap.get(rdate);
+          if (!back) continue;
+          // A same-day return has to leave after the outbound flight.
+          if (n === 0 && back.dep && out.dep && back.dep <= out.dep) continue;
+          trips.push({ oc, ic, odate, rdate, days: n, out, back,
+                       outRoute: asRoute(outKey), inRoute: asRoute(inKey),
+                       total: out.price + back.price });
+        }
+      }
+    }
+  }
+  trips.sort((a, b) => a.total - b.total || a.odate.localeCompare(b.odate) || a.days - b.days);
+  return trips;
+}
+
+async function renderTrips() {
+  const cap = document.getElementById("tripCap");
+  const host = document.getElementById("tripResults");
+  if (!cap || !host) return;
+  const opt = tripOptions();
+
+  if (!opt.outCities.length || !opt.inCities.length) {
+    cap.textContent = "Pick at least one airport to fly out to and one to fly back from.";
+    host.innerHTML = ""; return;
+  }
+  if (!opt.depDows.size || !opt.retDows.size) {
+    cap.textContent = "Tick at least one weekday to leave on and one to come back on.";
+    host.innerHTML = ""; return;
+  }
+
+  const token = ++tripRenderToken;
+  const fares = await tripFares(opt);
+  if (token !== tripRenderToken) return;   // a newer render already took over
+
+  const trips = buildTrips(fares, opt);
+  const latest = latestScrapeDate();
+  if (!trips.length) {
+    cap.textContent = `No trip matches these filters (fares from the latest scrape, ${fmtDate(latest)}).`;
+    host.innerHTML = `<div class="empty">Try a wider length range, more weekdays, or more airports.</div>`;
+    return;
+  }
+  const shown = Math.min(trips.length, MAX_TRIP_ROWS);
+  cap.textContent =
+    `${trips.length.toLocaleString()} trip${trips.length === 1 ? "" : "s"} match · cheapest ${money(trips[0].total)}`
+    + ` · fares from the latest scrape, ${fmtDate(latest)}`
+    + (shown < trips.length ? ` · showing the ${shown} cheapest` : "");
+  host.innerHTML = tripTable(trips.slice(0, shown));
+}
+
+function tripTable(trips) {
+  // Years are only spelled out when a date falls outside the current one, which
+  // keeps the table quiet while staying unambiguous across a year boundary.
+  const thisYear = String(new Date().getFullYear());
+  const fmtTripDate = d => `${fmtWeekday(d)} ${fmtDate(d)}` + (d.slice(0,4) === thisYear ? "" : " " + d.slice(0,4));
+  const leg = (route, date, f) =>
+    `<td>${route}</td><td>${fmtTripDate(date)}` +
+    `<span class="sub2">${f.dep || "—"}${f.fn ? " · " + f.fn : ""} · ${f.air}</span></td>` +
+    `<td class="num">${money(f.price)}</td>`;
+  const rows = trips.map((t, i) => `<tr>
+      <td class="rank num">${i + 1}</td>
+      <td class="num total">${money(t.total)}</td>
+      ${leg(t.outRoute, t.odate, t.out)}
+      ${leg(t.inRoute, t.rdate, t.back)}
+      <td class="num">${t.days}</td>
+    </tr>`).join("");
+  return `<div class="tablewrap"><table class="trips">
+    <thead><tr>
+      <th></th><th class="num">Total</th>
+      <th>Out</th><th>Departs</th><th class="num">Fare</th>
+      <th>Back</th><th>Departs</th><th class="num">Fare</th>
+      <th class="num">Days</th>
+    </tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+
+// --- Data adapter: cheapest fare per (route, date) in the latest scrape ------
+// The static build ships one JSON per city, so fetch (and cache) whichever
+// cities the filters involve, then flatten both sources into one map per leg.
+const latestScrapeDate = () => SUMMARY.latestScrape;
+
+async function tripFares(opt) {
+  const cities = [...new Set([...opt.outCities, ...opt.inCities])];
+  const datas = await Promise.all(cities.map(cityData));
+  const fares = {};
+  for (const j of datas) {
+    for (const S of ["out", "in"]) {
+      const leg = j.legs[S];
+      const m = new Map();
+      SOURCES.forEach(s => {
+        const f = leg.fare[s.key] || {};
+        for (const fd in f) {
+          const cur = m.get(fd);
+          if (!cur || f[fd].p < cur.price)
+            m.set(fd, { price:f[fd].p, dep:f[fd].dep, fn:f[fd].fn, air:f[fd].air, src:s.key });
+        }
+      });
+      fares[`${leg.origin}-${leg.destination}`] = m;
+    }
+  }
+  return fares;
 }
 
 const themeBtn = document.getElementById("themeBtn");
