@@ -110,6 +110,7 @@
 
   /* --- Trip finder --- */
   .tripgrid { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:14px; align-items:start; }
+  .card h2 + .tripgrid { margin-top:14px; }   /* the heading no longer has a subtitle under it */
   fieldset.grp { border:1px solid var(--border); border-radius:12px; padding:4px 12px 12px; margin:0; min-width:0; }
   fieldset.grp legend { color:var(--muted); font-size:11.5px; text-transform:uppercase; letter-spacing:0.04em; padding:0 5px; }
   .chips { display:flex; flex-wrap:wrap; gap:7px; }
@@ -130,7 +131,6 @@
   input[type="date"] { width:100%; max-width:150px; }
   .sublabel { color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:0.04em; margin:14px 0 7px; }
   fieldset.grp > .sublabel:first-of-type { margin-top:2px; }
-  .hint { color:var(--muted); font-size:11.5px; margin-top:8px; line-height:1.45; }
   .tablewrap { overflow-x:auto; }
   table.trips { font-size:13px; }
   table.trips td { padding:8px; vertical-align:top; white-space:nowrap; }
@@ -182,11 +182,6 @@
   <section id="view-trips" hidden>
     <div class="card">
       <h2>Find a trip</h2>
-      <p class="cap">
-        Every return trip that fits the filters, built from the latest scrape: the cheapest
-        outbound fare on a matching date plus the cheapest inbound fare the chosen number of
-        days later.
-      </p>
       <div class="tripgrid">
         <fieldset class="grp">
           <legend>The trip</legend>
@@ -195,25 +190,20 @@
             <button type="button" data-basis="stn" aria-pressed="true">From STN</button>
             <button type="button" data-basis="city" aria-pressed="false">To STN</button>
           </div>
-          <div class="hint">From STN: leave London, come back to it. To STN: leave a city, visit London, fly home.</div>
           <div class="sublabel">Dates</div>
           <div class="rangerow">
-            <label>from<input type="date" id="fromDate"></label>
-            <label>to<input type="date" id="toDate"></label>
+            <label>not before<input type="date" id="fromDate"></label>
+            <label>not after<input type="date" id="toDate"></label>
           </div>
-          <div class="hint">The whole trip has to fall inside this window. It opens on everything the
-            data covers — today through the furthest date scraped. Clear either for no limit.</div>
           <div class="sublabel">Length</div>
           <div class="rangerow">
             <label>min days<input type="number" id="minDays" min="0" max="90" step="1" value="2"></label>
             <label>max days<input type="number" id="maxDays" min="0" max="90" step="1" value="5"></label>
           </div>
-          <div class="hint">Days between the outbound and the inbound flight — i.e. nights away.</div>
           <div class="sublabel">Shape</div>
           <div class="chips">
             <label class="chip"><input type="checkbox" id="sameCity">Same city both ways</label>
           </div>
-          <div class="hint">Left off, open-jaw trips are included too — out to one city, back from another.</div>
         </fieldset>
         <fieldset class="grp">
           <legend id="legOut">Fly out STN →</legend>
