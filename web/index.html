@@ -198,10 +198,11 @@
           <div class="hint">From STN: leave London, come back to it. To STN: leave a city, visit London, fly home.</div>
           <div class="sublabel">Dates</div>
           <div class="rangerow">
-            <label>not before<input type="date" id="fromDate"></label>
-            <label>not after<input type="date" id="toDate"></label>
+            <label>from<input type="date" id="fromDate"></label>
+            <label>to<input type="date" id="toDate"></label>
           </div>
-          <div class="hint">The whole trip has to fall inside this window. Leave either empty for no limit.</div>
+          <div class="hint">The whole trip has to fall inside this window. It opens on everything the
+            data covers — today through the furthest date scraped. Clear either for no limit.</div>
           <div class="sublabel">Length</div>
           <div class="rangerow">
             <label>min days<input type="number" id="minDays" min="0" max="90" step="1" value="2"></label>
@@ -628,14 +629,17 @@ function initTrips(cities) {
   document.getElementById("inCities").innerHTML  = cities.map(c => chip("inCity",  c, c, true)).join("");
   document.getElementById("depDows").innerHTML   = DOWS.map(([i,l]) => chip("depDow", i, l, true)).join("");
   document.getElementById("retDows").innerHTML   = DOWS.map(([i,l]) => chip("retDow", i, l, true)).join("");
-  // Bound the pickers to the window the latest scrape covers, so the calendar
-  // cannot offer a date no flight could fall on.
+  // Open on the whole window the data can answer for — today through the furthest
+  // flight date the latest scrape reaches — and bound the pickers to it, so the
+  // calendar cannot offer a date no flight could fall on.
   const [, lastFlight] = SUMMARY.flightDateRange;
-  ["fromDate", "toDate"].forEach(id => {
-    const el = document.getElementById(id);
-    el.min = latestScrapeDate();
-    el.max = lastFlight;
-  });
+  const now = new Date(), pad = n => String(n).padStart(2, "0");
+  const today = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+  const first = today <= lastFlight ? today : lastFlight;   // data gone stale
+  const fromEl = document.getElementById("fromDate"), toEl = document.getElementById("toDate");
+  [fromEl, toEl].forEach(el => { el.min = first; el.max = lastFlight; });
+  fromEl.value = first;
+  toEl.value = lastFlight;
   document.getElementById("view-trips").addEventListener("change", renderTrips);
   document.getElementById("view-trips").addEventListener("input", renderTrips);
   setupBasis();

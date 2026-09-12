@@ -92,8 +92,9 @@ A **Trips** tab turns the one-way fares into whole return trips. Pick:
   *To STN* (leave a city, visit London, fly home), which flips both legs;
 - **which airports** — STN is fixed on the London side; tick any of the four cities to
   fly out to, and (separately) any to fly back from;
-- **when it can happen** — an optional *not before* / *not after* date window the whole
-  trip has to fall inside; leave either empty for no limit;
+- **when it can happen** — a *from* / *to* date window the whole trip has to fall inside;
+  it opens on everything the data covers (today through the furthest date scraped) and
+  either field can be cleared for no limit;
 - **how long the trip is** — a min/max range of days, counted between the outbound and
   the inbound flight;
 - **which days of week** it starts and ends on — tickboxes for leaving and for coming
