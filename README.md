@@ -100,6 +100,11 @@ A **Trips** tab turns the one-way fares into whole return trips. Pick:
 - **which days of week** it starts and ends on — tickboxes for leaving and for coming
   back.
 
+Every choice on the page — tab, currency, theme, selected city, and every trip filter —
+is remembered in the browser and restored on the next visit. The one exception is the date
+window: if a saved bound has fallen into the past it would silently match nothing, so it
+resets to the full range instead (a bound you deliberately cleared stays cleared).
+
 Every combination that fits is listed cheapest first, with both flights' date, time,
 flight number, airline and fare, and the trip total. Prices come from the most recent
 scrape and use the cheapest source (Ryanair or Kiwi) for each leg. Open-jaw trips — out

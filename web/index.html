@@ -275,6 +275,50 @@ const CITYCACHE = {};       // city -> parsed city JSON
 let CURRENT = null;         // currently selected city's data
 let state = { city: null, dep: { out: null, in: null } };
 
+/* --- Saved preferences -------------------------------------------------------
+   Every choice on the page is kept in localStorage so a refresh lands you back
+   where you were. Storage can throw or come back empty (private window, blocked
+   site data), so each read and write is guarded and the page works without it. */
+const PREFS_KEY = "flights-dashboard-prefs-v1";
+let prefsReady = false;   // true once the trip controls hold their restored values
+
+function readPrefs() {
+  try { return JSON.parse(localStorage.getItem(PREFS_KEY)) || {}; }
+  catch { return {}; }
+}
+
+// Merge rather than replace: the header settings are savable from the first
+// paint, while city and trip filters only once their controls exist.
+function savePrefs() {
+  const pressed = sel => { const b = document.querySelector(sel); return b && b.dataset; };
+  const patch = {
+    tab: (pressed('#tabs button[aria-pressed="true"]') || {}).tab,
+    ccy: CCY,
+    theme: document.documentElement.getAttribute("data-theme") || "",
+  };
+  if (prefsReady) {
+    const val = id => document.getElementById(id);
+    patch.city = state.city;
+    patch.dep = state.dep;
+    patch.trip = {
+      basis: currentBasis(),
+      outCities: checkedValues("outCity"),
+      inCities: checkedValues("inCity"),
+      depDows: checkedValues("depDow"),
+      retDows: checkedValues("retDow"),
+      minDays: val("minDays").value,
+      maxDays: val("maxDays").value,
+      sameCity: val("sameCity").checked,
+      from: val("fromDate").value,
+      to: val("toDate").value,
+    };
+  }
+  try { localStorage.setItem(PREFS_KEY, JSON.stringify({ ...readPrefs(), ...patch })); } catch {}
+}
+
+// Theme first, before the page paints, so a saved choice doesn't flash.
+(() => { const th = readPrefs().theme; if (th) document.documentElement.setAttribute("data-theme", th); })();
+
 boot();
 async function boot() {
   let summary, rates;
@@ -290,11 +334,15 @@ async function boot() {
 }
 
 function setupCurrency() {
+  const saved = readPrefs().ccy;
+  if (saved && RATES.rates[saved]) CCY = saved;
   document.querySelectorAll("#currency button").forEach(btn => {
+    btn.setAttribute("aria-pressed", String(btn.dataset.ccy === CCY));
     btn.addEventListener("click", () => {
       CCY = btn.dataset.ccy;
       document.querySelectorAll("#currency button").forEach(b =>
         b.setAttribute("aria-pressed", String(b === btn)));
+      savePrefs();
       if (CURRENT) { render(); renderTrips(); }
     });
   });
@@ -304,10 +352,13 @@ async function init() {
   buildSubtitle();
   const sel = document.getElementById("city");
   SUMMARY.cities.forEach(c => { const o=document.createElement("option"); o.value=c; o.textContent=c; sel.appendChild(o); });
-  state.city = SUMMARY.cities[0];
+  const prefs = readPrefs();
+  state.city = SUMMARY.cities.includes(prefs.city) ? prefs.city : SUMMARY.cities[0];
+  state.dep = prefs.dep || state.dep;   // refreshDepDates drops any date the data lost
   sel.value = state.city;
   sel.addEventListener("change", async () => {
     state.city = sel.value; state.dep = { out:null, in:null };
+    savePrefs();
     await loadCity(state.city); render();
   });
 
@@ -316,6 +367,8 @@ async function init() {
   await loadCity(state.city);
   initTrips(SUMMARY.cities);
   render();
+  const savedTab = readPrefs().tab;
+  if (savedTab && savedTab !== "prices") document.querySelector(`#tabs button[data-tab="${savedTab}"]`).click();
   window.addEventListener("resize", render);
 }
 
@@ -365,7 +418,7 @@ function buildColumns() {
     </div>`).join("");
   DIRS.forEach(({S}) => {
     document.getElementById(`depdate_${S}`).addEventListener("change", e => {
-      state.dep[S] = e.target.value; renderColumn(S);
+      state.dep[S] = e.target.value; savePrefs(); renderColumn(S);
     });
   });
 }
@@ -630,8 +683,35 @@ function initTrips(cities) {
   [fromEl, toEl].forEach(el => { el.min = first; el.max = lastFlight; });
   fromEl.value = first;
   toEl.value = lastFlight;
-  document.getElementById("view-trips").addEventListener("change", renderTrips);
-  document.getElementById("view-trips").addEventListener("input", renderTrips);
+
+  const saved = readPrefs().trip;
+  if (saved) {
+    const tick = (name, vals) => {
+      if (!Array.isArray(vals)) return;
+      document.querySelectorAll(`#view-trips input[name="${name}"]`)
+        .forEach(i => i.checked = vals.includes(i.value));
+    };
+    tick("outCity", saved.outCities); tick("inCity", saved.inCities);
+    tick("depDow", saved.depDows);    tick("retDow", saved.retDows);
+    if (saved.minDays) document.getElementById("minDays").value = saved.minDays;
+    if (saved.maxDays) document.getElementById("maxDays").value = saved.maxDays;
+    document.getElementById("sameCity").checked = !!saved.sameCity;
+    if (saved.basis) document.querySelectorAll("#basis button").forEach(b =>
+      b.setAttribute("aria-pressed", String(b.dataset.basis === saved.basis)));
+    // A window that has fallen into the past would silently match nothing, so a
+    // saved bound earlier than today is dropped and both fields go back to the
+    // full range. An intentionally cleared (empty) bound is kept as-is.
+    const stale = (saved.from && saved.from < today) || (saved.to && saved.to < today);
+    if (!stale) {
+      if (saved.from !== undefined) fromEl.value = saved.from;
+      if (saved.to !== undefined) toEl.value = saved.to;
+    }
+  }
+  prefsReady = true;
+
+  const onFilterChange = () => { savePrefs(); renderTrips(); };
+  document.getElementById("view-trips").addEventListener("change", onFilterChange);
+  document.getElementById("view-trips").addEventListener("input", onFilterChange);
   setupBasis();
   setupTabs();
   renderTrips();
@@ -649,6 +729,7 @@ function setupBasis() {
     btn.addEventListener("click", () => {
       document.querySelectorAll("#basis button").forEach(b => b.setAttribute("aria-pressed", String(b === btn)));
       relabel();
+      savePrefs();
       renderTrips();
     });
   });
@@ -662,6 +743,7 @@ function setupTabs() {
       document.querySelectorAll("#tabs button").forEach(b => b.setAttribute("aria-pressed", String(b === btn)));
       document.getElementById("view-prices").hidden = tab !== "prices";
       document.getElementById("view-trips").hidden  = tab !== "trips";
+      savePrefs();
       // Charts size themselves to the host element, which measures 0 while hidden.
       if (tab === "prices") render();
     });
@@ -825,6 +907,7 @@ themeBtn.addEventListener("click", () => {
   const next = cur === "dark" ? "light" : (cur === "light" ? "dark"
     : (matchMedia("(prefers-color-scheme: dark)").matches ? "light" : "dark"));
   document.documentElement.setAttribute("data-theme", next);
+  savePrefs();
   if (CURRENT) render();
 });
 </script>
