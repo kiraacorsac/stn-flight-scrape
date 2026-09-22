@@ -3,9 +3,13 @@
 Tracks **direct** flight prices from **Ryanair** and **Kiwi.com** and stores every scrape
 as a time series, so you can watch prices evolve as departure approaches.
 
-What gets tracked is defined by a **profile**. The one profile today is **Kirovci**:
-**London Stansted (STN)** ↔ **Brno (BRQ), Bratislava (BTS), Prague (PRG), Vienna (VIE)**,
-both directions.
+What gets tracked is defined by a **profile**. Two exist today, both hubbed on **London
+Stansted (STN)** and both directions:
+
+| profile | destinations |
+|---|---|
+| **Kirovci** | Brno (BRQ), Bratislava (BTS), Prague (PRG), Vienna (VIE) |
+| **Giulia** | Brindisi (BDS), Bari (BRI) |
 
 - Every run scrapes all flight dates in a **rolling 0–90 day window**, so each flight is
   re-sampled daily as it gets closer.
@@ -27,6 +31,11 @@ PROFILES = {
     "kirovci": Profile(
         id="kirovci", name="Kirovci", hub="STN",
         destinations=("BRQ", "BTS", "PRG", "VIE"),
+        airport_names={...},
+    ),
+    "giulia": Profile(
+        id="giulia", name="Giulia", hub="STN",
+        destinations=("BDS", "BRI"),
         airport_names={...},
     ),
 }
