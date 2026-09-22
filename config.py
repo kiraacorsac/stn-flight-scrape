@@ -1,45 +1,73 @@
 """Static configuration for the flight-price scraper.
 
-Everything the scraper needs to know about *what* to scrape lives here: the hub
-airport, the destinations, how the legs are derived, and the size of the rolling
-date window. Keeping it in one place makes it trivial to add a destination or
-change the horizon later.
+Everything the scraper needs to know about *what* to scrape lives in a **profile**:
+the hub airport, the destinations, and the legs derived from them. A profile is the
+unit every other layer partitions by — rows carry their profile id, the export writes
+one folder per profile, and the dashboard has a profile dropdown at the top. Adding a
+watch-list for a different group of people therefore means adding one `Profile` below
+and nothing else.
+
+The rolling-window size, HTTP politeness and storage settings are global: they apply
+to every profile.
 """
 
 from __future__ import annotations
 
 import os
+from dataclasses import dataclass
 from pathlib import Path
 
-# --- Airports / routes ------------------------------------------------------
+# --- Profiles ---------------------------------------------------------------
 
-# London Stansted is the fixed hub. Every leg starts or ends here.
-HUB = "STN"
 
-# The four Central-European airports we track, both directions.
-DESTINATIONS = ["BRQ", "BTS", "PRG", "VIE"]
+@dataclass(frozen=True, slots=True)
+class Profile:
+    """One named watch-list: a hub, its destinations, and the legs between them."""
 
-# Human-readable airport names, purely for nicer logging / reports.
-AIRPORT_NAMES = {
-    "STN": "London Stansted",
-    "BRQ": "Brno",
-    "BTS": "Bratislava",
-    "PRG": "Prague",
-    "VIE": "Vienna",
+    id: str                      # slug used in the DB, the export path and the URL
+    name: str                    # label shown in the dashboard's dropdown
+    hub: str                     # IATA of the fixed hub; every leg starts or ends here
+    destinations: tuple[str, ...]
+    airport_names: dict[str, str]  # IATA -> human name, for nicer logging / reports
+
+    def legs(self) -> list[tuple[str, str]]:
+        """Return every (origin, destination) leg: hub->dest and dest->hub."""
+        legs: list[tuple[str, str]] = []
+        for dest in self.destinations:
+            legs.append((self.hub, dest))  # outbound
+            legs.append((dest, self.hub))  # return
+        return legs
+
+
+PROFILES: dict[str, Profile] = {
+    "kirovci": Profile(
+        id="kirovci",
+        name="Kirovci",
+        hub="STN",
+        destinations=("BRQ", "BTS", "PRG", "VIE"),
+        airport_names={
+            "STN": "London Stansted",
+            "BRQ": "Brno",
+            "BTS": "Bratislava",
+            "PRG": "Prague",
+            "VIE": "Vienna",
+        },
+    ),
 }
 
-
-def build_legs() -> list[tuple[str, str]]:
-    """Return every (origin, destination) leg: HUB->dest and dest->HUB."""
-    legs: list[tuple[str, str]] = []
-    for dest in DESTINATIONS:
-        legs.append((HUB, dest))  # outbound
-        legs.append((dest, HUB))  # return
-    return legs
+# The profile the dashboard opens on and the one legacy rows were backfilled with.
+DEFAULT_PROFILE_ID = "kirovci"
 
 
-# All 8 legs (4 destinations x 2 directions).
-LEGS = build_legs()
+def get_profile(profile_id: str) -> Profile:
+    """Look up a profile by id, with a helpful error listing the valid ones."""
+    try:
+        return PROFILES[profile_id]
+    except KeyError:
+        raise SystemExit(
+            f"Unknown profile {profile_id!r}. Known profiles: {', '.join(PROFILES)}"
+        ) from None
+
 
 # --- Scrape window ----------------------------------------------------------
 

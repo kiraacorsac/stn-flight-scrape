@@ -35,3 +35,8 @@ class FlightObservation:
     scrape_date: str = ""   # "YYYY-MM-DD"
     scrape_time: str = ""   # "HH:MM:SS"
     scraped_at: str = ""    # full ISO-8601 timestamp
+
+    # Which watch-list this observation belongs to (config.Profile.id). Also filled
+    # in by the orchestrator: the sources fetch a leg without caring who wants it,
+    # and one leg shared by two profiles is fetched once and stamped twice.
+    profile: str = ""

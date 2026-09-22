@@ -38,6 +38,7 @@
   header { display:flex; align-items:center; justify-content:space-between; gap:14px 22px; flex-wrap:wrap; }
   .headline { min-width:0; }
   .headctl { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  .titlerow { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
   h1 { font-size:22px; margin:0; letter-spacing:-0.01em; }
   .sub { color:var(--text-secondary); font-size:13.5px; line-height:1.65; }
   #subtitle { margin-top:9px; }
@@ -53,6 +54,8 @@
     background:var(--surface-1); color:var(--text-primary); border:1px solid var(--border);
     border-radius:8px; padding:8px 10px; font-size:14px; min-width:210px; font-family:inherit;
   }
+  /* The profile picker sits beside the title: everything below belongs to it. */
+  #profile { min-width:0; padding:6px 10px; font-size:14px; font-weight:600; }
   .segmented { display:inline-flex; border:1px solid var(--border); border-radius:8px; overflow:hidden; }
   .segmented button {
     background:var(--surface-1); color:var(--text-secondary); border:0; border-left:1px solid var(--border);
@@ -145,7 +148,10 @@
 <div class="wrap">
   <header>
     <div class="headline">
-      <h1>Flights Price Dashboard</h1>
+      <div class="titlerow">
+        <h1>Flights Price Dashboard</h1>
+        <select id="profile" aria-label="Profile"></select>
+      </div>
     </div>
     <div class="headctl">
       <nav class="tabs" id="tabs" role="group" aria-label="View">
@@ -187,8 +193,8 @@
           <legend>The trip</legend>
           <div class="sublabel">Starts</div>
           <div class="segmented" id="basis" role="group" aria-label="Which end the trip starts from">
-            <button type="button" data-basis="stn" aria-pressed="true">From STN</button>
-            <button type="button" data-basis="city" aria-pressed="false">To STN</button>
+            <button type="button" data-basis="hub" aria-pressed="true"></button>
+            <button type="button" data-basis="city" aria-pressed="false"></button>
           </div>
           <div class="sublabel">Dates</div>
           <div class="rangerow">
@@ -206,14 +212,14 @@
           </div>
         </fieldset>
         <fieldset class="grp">
-          <legend id="legOut">Fly out STN →</legend>
+          <legend id="legOut"></legend>
           <div class="sublabel">Airports</div>
           <div class="chips" id="outCities"></div>
           <div class="sublabel">Leave on</div>
           <div class="chips" id="depDows"></div>
         </fieldset>
         <fieldset class="grp">
-          <legend id="legIn">Fly back → STN</legend>
+          <legend id="legIn"></legend>
           <div class="sublabel">Airports</div>
           <div class="chips" id="inCities"></div>
           <div class="sublabel">Come back on</div>
@@ -233,7 +239,6 @@
 
 <script>
 const SVGNS = "http://www.w3.org/2000/svg";
-const HUB = "STN";
 const SOURCES = [
   { key: "ryanair", name: "Ryanair", varName: "--series-1" },
   { key: "kiwi",    name: "Kiwi.com", varName: "--series-2" },
@@ -270,8 +275,18 @@ const fmtAxis = v => {
   return CCY === "CZK" ? c + " Kč" : (CCY === "EUR" ? "€" : "£") + c;
 };
 
-let SUMMARY = null;         // summary.json
-const CITYCACHE = {};       // city -> parsed city JSON
+/* --- Profile ---------------------------------------------------------------
+   A profile is the whole dataset behind the page: a hub, the airports watched from
+   it, and every price scraped for them. The export writes one folder per profile,
+   so picking one from the dropdown swaps the folder every fetch below reads from
+   and reloads the page's data. Nothing further down knows which profile it draws. */
+let PROFILES = [];          // profiles.json: [{id, name, hub}, ...]
+let PROFILE = null;         // id of the selected profile
+let HUB = "";               // its hub airport, from that profile's summary.json
+let profileToken = 0;       // guards against a slow profile load landing out of order
+
+let SUMMARY = null;         // the selected profile's summary.json
+const CITYCACHE = {};       // profile -> city -> promise of the parsed city JSON
 let CURRENT = null;         // currently selected city's data
 let state = { city: null, dep: { out: null, in: null } };
 
@@ -279,7 +294,7 @@ let state = { city: null, dep: { out: null, in: null } };
    Every choice on the page is kept in localStorage so a refresh lands you back
    where you were. Storage can throw or come back empty (private window, blocked
    site data), so each read and write is guarded and the page works without it. */
-const PREFS_KEY = "flights-dashboard-prefs-v1";
+const PREFS_KEY = "flights-dashboard-prefs-v2";
 let prefsReady = false;   // true once the trip controls hold their restored values
 
 function readPrefs() {
@@ -291,46 +306,119 @@ function readPrefs() {
 // paint, while city and trip filters only once their controls exist.
 function savePrefs() {
   const pressed = sel => { const b = document.querySelector(sel); return b && b.dataset; };
+  const prev = readPrefs();
   const patch = {
     tab: (pressed('#tabs button[aria-pressed="true"]') || {}).tab,
     ccy: CCY,
     theme: document.documentElement.getAttribute("data-theme") || "",
+    profile: PROFILE || prev.profile,
+    byProfile: { ...(prev.byProfile || {}) },
   };
-  if (prefsReady) {
+  // The city and the trip filters are kept per profile: profiles watch different
+  // airports, so one shared selection would be meaningless in the other.
+  if (prefsReady && PROFILE) {
     const val = id => document.getElementById(id);
-    patch.city = state.city;
-    patch.dep = state.dep;
-    patch.trip = {
-      basis: currentBasis(),
-      outCities: checkedValues("outCity"),
-      inCities: checkedValues("inCity"),
-      depDows: checkedValues("depDow"),
-      retDows: checkedValues("retDow"),
-      minDays: val("minDays").value,
-      maxDays: val("maxDays").value,
-      sameCity: val("sameCity").checked,
-      from: val("fromDate").value,
-      to: val("toDate").value,
+    patch.byProfile[PROFILE] = {
+      city: state.city,
+      dep: state.dep,
+      trip: {
+        basis: currentBasis(),
+        outCities: checkedValues("outCity"),
+        inCities: checkedValues("inCity"),
+        depDows: checkedValues("depDow"),
+        retDows: checkedValues("retDow"),
+        minDays: val("minDays").value,
+        maxDays: val("maxDays").value,
+        sameCity: val("sameCity").checked,
+        from: val("fromDate").value,
+        to: val("toDate").value,
+      },
     };
   }
-  try { localStorage.setItem(PREFS_KEY, JSON.stringify({ ...readPrefs(), ...patch })); } catch {}
+  try { localStorage.setItem(PREFS_KEY, JSON.stringify({ ...prev, ...patch })); } catch {}
 }
+
+// The saved city and trip selections belonging to the profile now on screen.
+const profilePrefs = () => (readPrefs().byProfile || {})[PROFILE] || {};
 
 // Theme first, before the page paints, so a saved choice doesn't flash.
 (() => { const th = readPrefs().theme; if (th) document.documentElement.setAttribute("data-theme", th); })();
 
+const getJSON = async url => (await fetch(url, {cache:"no-store"})).json();
+const fail = msg => { document.getElementById("subtitle").textContent = msg; };
+
 boot();
 async function boot() {
-  let summary, rates;
-  try { summary = await (await fetch("data/summary.json", {cache:"no-store"})).json(); }
-  catch { document.getElementById("subtitle").textContent = "Could not load data (data/summary.json)."; return; }
+  let index, rates;
+  try { index = await getJSON("data/profiles.json"); }
+  catch { fail("Could not load data (data/profiles.json)."); return; }
   try {
     const j = await (await fetch("https://api.frankfurter.dev/v1/latest?base=GBP&symbols=CZK,EUR")).json();
     rates = { date: j.date, approx:false, rates: { GBP:1, ...j.rates } };
   } catch { rates = FALLBACK_RATES; }
-  SUMMARY = summary; RATES = rates;
+  RATES = rates;
+  PROFILES = index.profiles || [];
+  if (!PROFILES.length) { fail("No profile has any data yet — run the scraper, then export.py."); return; }
+
+  // Everything that outlives a profile switch is wired once, here; everything that
+  // depends on which profile is showing is (re)built by loadProfile below.
+  const saved = readPrefs().profile;
+  PROFILE = PROFILES.some(p => p.id === saved) ? saved : (index.default || PROFILES[0].id);
+  setupProfiles();
   setupCurrency();
-  await init();
+  setupTabs();
+  setupBasis();
+  wireCitySelect();
+  wireTripFilters();
+
+  await loadProfile(PROFILE);
+  const savedTab = readPrefs().tab;
+  if (savedTab && savedTab !== "prices") document.querySelector(`#tabs button[data-tab="${savedTab}"]`).click();
+  window.addEventListener("resize", render);
+}
+
+// The profile dropdown. Switching is a full data swap, so it simply reloads.
+function setupProfiles() {
+  const sel = document.getElementById("profile");
+  sel.innerHTML = "";
+  PROFILES.forEach(p => {
+    const o = document.createElement("option");
+    o.value = p.id; o.textContent = p.name;
+    sel.appendChild(o);
+  });
+  sel.value = PROFILE;
+  sel.addEventListener("change", () => {
+    // The controls still hold the outgoing profile's values, so stop saving them
+    // before PROFILE moves — otherwise they would be filed under the new profile.
+    prefsReady = false;
+    PROFILE = sel.value;
+    savePrefs();          // remembered even if this profile's data then fails to load
+    loadProfile(PROFILE);
+  });
+}
+
+// Load one profile and rebuild everything that depends on it: the stats line, the
+// city list, the charts and the trip filters (whose airports come from the profile).
+async function loadProfile(id) {
+  prefsReady = false;                 // nothing is saved while the controls are mid-swap
+  const token = ++profileToken;
+  let summary;
+  try { summary = await getJSON(`data/${id}/summary.json`); }
+  catch { fail(`Could not load this profile's data (data/${id}/summary.json).`); return; }
+  if (token !== profileToken) return;  // a newer switch already took over
+
+  SUMMARY = summary;
+  HUB = (summary.profile || {}).hub || HUB;
+  buildSubtitle();
+  fillCitySelect();
+  buildColumns();
+  try { await loadCity(state.city); }
+  catch { fail(`Could not load data for ${state.city} (data/${id}/${state.city}.json).`); return; }
+  if (token !== profileToken) return;
+
+  buildTripFilters(SUMMARY.cities);
+  render();
+  renderTrips();
 }
 
 function setupCurrency() {
@@ -348,36 +436,35 @@ function setupCurrency() {
   });
 }
 
-async function init() {
-  buildSubtitle();
+// Fill the city dropdown from the profile now loading, and restore its saved city.
+function fillCitySelect() {
   const sel = document.getElementById("city");
+  sel.innerHTML = "";
   SUMMARY.cities.forEach(c => { const o=document.createElement("option"); o.value=c; o.textContent=c; sel.appendChild(o); });
-  const prefs = readPrefs();
+  const prefs = profilePrefs();
   state.city = SUMMARY.cities.includes(prefs.city) ? prefs.city : SUMMARY.cities[0];
-  state.dep = prefs.dep || state.dep;   // refreshDepDates drops any date the data lost
+  state.dep = prefs.dep || { out:null, in:null };   // refreshDepDates drops dates the data lost
   sel.value = state.city;
-  sel.addEventListener("change", async () => {
-    state.city = sel.value; state.dep = { out:null, in:null };
+}
+
+function wireCitySelect() {
+  document.getElementById("city").addEventListener("change", async e => {
+    state.city = e.target.value; state.dep = { out:null, in:null };
     savePrefs();
     await loadCity(state.city); render();
   });
-
-  buildColumns();
-
-  await loadCity(state.city);
-  initTrips(SUMMARY.cities);
-  render();
-  const savedTab = readPrefs().tab;
-  if (savedTab && savedTab !== "prices") document.querySelector(`#tabs button[data-tab="${savedTab}"]`).click();
-  window.addEventListener("resize", render);
 }
 
-// Fetch one city's JSON (cached for the page's lifetime).
-async function cityData(city) {
-  if (!CITYCACHE[city]) {
-    CITYCACHE[city] = await (await fetch(`data/${city}.json`, {cache:"no-store"})).json();
+// Fetch one city's JSON (cached per profile for the page's lifetime). The promise
+// itself is cached so two callers racing for the same city share one request; a
+// failed one is dropped so a later attempt can retry.
+async function cityData(city, profile = PROFILE) {
+  const bucket = CITYCACHE[profile] || (CITYCACHE[profile] = {});
+  if (!bucket[city]) {
+    bucket[city] = getJSON(`data/${profile}/${city}.json`)
+      .catch(err => { delete bucket[city]; throw err; });
   }
-  return CITYCACHE[city];
+  return bucket[city];
 }
 
 async function loadCity(city) {
@@ -665,7 +752,10 @@ const dowOf = iso => new Date(dayNumber(iso)*DAY_MS).getUTCDay();
 const MAX_TRIP_ROWS = 200;
 let tripRenderToken = 0;   // guards against a slow fetch finishing out of order
 
-function initTrips(cities) {
+// Rebuild the filters for the profile being loaded: its airports become the
+// tickboxes, its flight-date range bounds the calendars, and whatever was saved
+// for that profile is restored on top.
+function buildTripFilters(cities) {
   const chip = (name, val, label, checked) =>
     `<label class="chip"><input type="checkbox" name="${name}" value="${val}"${checked ? " checked" : ""}>${label}</label>`;
   document.getElementById("outCities").innerHTML = cities.map(c => chip("outCity", c, c, true)).join("");
@@ -684,7 +774,7 @@ function initTrips(cities) {
   fromEl.value = first;
   toEl.value = lastFlight;
 
-  const saved = readPrefs().trip;
+  const saved = profilePrefs().trip;
   if (saved) {
     const tick = (name, vals) => {
       if (!Array.isArray(vals)) return;
@@ -696,8 +786,10 @@ function initTrips(cities) {
     if (saved.minDays) document.getElementById("minDays").value = saved.minDays;
     if (saved.maxDays) document.getElementById("maxDays").value = saved.maxDays;
     document.getElementById("sameCity").checked = !!saved.sameCity;
-    if (saved.basis) document.querySelectorAll("#basis button").forEach(b =>
-      b.setAttribute("aria-pressed", String(b.dataset.basis === saved.basis)));
+    // Ignore a basis that no longer names a button, or nothing would be pressed.
+    if (document.querySelector(`#basis button[data-basis="${saved.basis}"]`))
+      document.querySelectorAll("#basis button").forEach(b =>
+        b.setAttribute("aria-pressed", String(b.dataset.basis === saved.basis)));
     // A window that has fallen into the past would silently match nothing, so a
     // saved bound earlier than today is dropped and both fields go back to the
     // full range. An intentionally cleared (empty) bound is kept as-is.
@@ -707,33 +799,38 @@ function initTrips(cities) {
       if (saved.to !== undefined) toEl.value = saved.to;
     }
   }
+  relabelBasis();    // the hub in the labels belongs to this profile
   prefsReady = true;
+}
 
+// The one-time wiring behind the filters. Both listeners sit on the container, so
+// they survive buildTripFilters replacing the chips underneath them.
+function wireTripFilters() {
   const onFilterChange = () => { savePrefs(); renderTrips(); };
   document.getElementById("view-trips").addEventListener("change", onFilterChange);
   document.getElementById("view-trips").addEventListener("input", onFilterChange);
-  setupBasis();
-  setupTabs();
-  renderTrips();
 }
 
-// The From-STN / To-STN switch. Buttons emit no change event, so it wires its own
-// clicks and relabels the two airport pickers to match the direction of travel.
+// The two airport pickers and the basis buttons are named after the profile's hub,
+// so they are relabelled whenever the basis or the profile changes.
+function relabelBasis() {
+  const fromHub = currentBasis() === "hub";
+  document.querySelector('#basis button[data-basis="hub"]').textContent = `From ${HUB}`;
+  document.querySelector('#basis button[data-basis="city"]').textContent = `To ${HUB}`;
+  document.getElementById("legOut").textContent = fromHub ? `Fly out ${HUB} →` : `Fly out → ${HUB}`;
+  document.getElementById("legIn").textContent  = fromHub ? `Fly back → ${HUB}` : `Fly back ${HUB} →`;
+}
+
+// The From-hub / To-hub switch. Buttons emit no change event, so it wires its own clicks.
 function setupBasis() {
-  const relabel = () => {
-    const stn = currentBasis() === "stn";
-    document.getElementById("legOut").textContent = stn ? `Fly out ${HUB} →` : `Fly out → ${HUB}`;
-    document.getElementById("legIn").textContent  = stn ? `Fly back → ${HUB}` : `Fly back ${HUB} →`;
-  };
   document.querySelectorAll("#basis button").forEach(btn => {
     btn.addEventListener("click", () => {
       document.querySelectorAll("#basis button").forEach(b => b.setAttribute("aria-pressed", String(b === btn)));
-      relabel();
+      relabelBasis();
       savePrefs();
       renderTrips();
     });
   });
-  relabel();
 }
 
 function setupTabs() {
@@ -745,7 +842,7 @@ function setupTabs() {
       document.getElementById("view-trips").hidden  = tab !== "trips";
       savePrefs();
       // Charts size themselves to the host element, which measures 0 while hidden.
-      if (tab === "prices") render();
+      if (tab === "prices" && CURRENT) render();
     });
   });
 }
@@ -754,11 +851,11 @@ const checkedValues = name =>
   [...document.querySelectorAll(`#view-trips input[name="${name}"]:checked`)].map(i => i.value);
 
 // Which end of the round trip a city sits on depends on where the trip is based:
-// starting from STN you fly out to the city and back from it; starting at the city
-// it is the mirror image.
+// starting from the hub you fly out to the city and back from it; starting at the
+// city it is the mirror image.
 const currentBasis = () => document.querySelector('#basis button[aria-pressed="true"]').dataset.basis;
 const legKey = (basis, half, city) =>
-  (basis === "stn") === (half === "out") ? `${HUB}-${city}` : `${city}-${HUB}`;
+  (basis === "hub") === (half === "out") ? `${HUB}-${city}` : `${city}-${HUB}`;
 
 function tripOptions() {
   const num = id => { const v = parseInt(document.getElementById(id).value, 10); return Number.isFinite(v) ? v : 0; };
@@ -831,7 +928,13 @@ async function renderTrips() {
   }
 
   const token = ++tripRenderToken;
-  const fares = await tripFares(opt);
+  const profile = PROFILE;                 // the fetches below must not outlive a switch
+  let fares;
+  try { fares = await tripFares(opt, profile); }
+  catch {
+    if (token === tripRenderToken) { cap.textContent = "Could not load fare data."; host.innerHTML = ""; }
+    return;
+  }
   if (token !== tripRenderToken) return;   // a newer render already took over
 
   const trips = buildTrips(fares, opt);
@@ -879,9 +982,9 @@ function tripTable(trips) {
 // cities the filters involve, then flatten both sources into one map per leg.
 const latestScrapeDate = () => SUMMARY.latestScrape;
 
-async function tripFares(opt) {
+async function tripFares(opt, profile = PROFILE) {
   const cities = [...new Set([...opt.outCities, ...opt.inCities])];
-  const datas = await Promise.all(cities.map(cityData));
+  const datas = await Promise.all(cities.map(c => cityData(c, profile)));
   const fares = {};
   for (const j of datas) {
     for (const S of ["out", "in"]) {

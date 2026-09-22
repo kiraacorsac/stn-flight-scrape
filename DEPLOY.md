@@ -8,13 +8,15 @@ likely to block than a datacenter IP).
  your PC (daily task)                         GitHub (free)
  ─────────────────────                        ─────────────
  scrape.py   → flights.db                     gh-pages branch:
- export.py   → web/data/*.json    ── push ──►   index.html + data/*.json  → GitHub Pages
+ export.py   → web/data/   ── push ──►          index.html + data/  → GitHub Pages
  deploy_pages.ps1 (force-push)                  flights.db (optional download)
 ```
 
-**Why this scales.** The dashboard reads small **per-city JSON** files (a few hundred KB
-each, gzipped by Pages), not the whole database — so the site stays fast and small for
-years no matter how big `flights.db` gets. See "When the database gets big" below.
+**Why this scales.** The dashboard reads small JSON files split **per profile, then per
+city** (a few hundred KB each, gzipped by Pages), not the whole database — so the site
+stays fast and small for years no matter how big `flights.db` gets, and adding a profile
+only adds files the page fetches when that profile is selected. See "When the database
+gets big" below.
 
 ## One-time setup
 
@@ -77,8 +79,8 @@ history of the growing database.
 
 ## When the database gets big
 
-- **The dashboard is unaffected** — it uses the small per-city JSON, which stays well under
-  any limit for many years.
+- **The dashboard is unaffected** — it uses the small per-profile, per-city JSON, which
+  stays well under any limit for many years.
 - **Only the raw `flights.db` download** hits GitHub's **100 MB per-file limit** (≈8 months
   at current growth). Two options when it approaches that:
   1. **Stop publishing the raw file:** run the deploy with `-NoDb`. The dashboard keeps
