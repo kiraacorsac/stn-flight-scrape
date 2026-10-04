@@ -1,0 +1,1 @@
+{"profile":{"id":"kirovci","name":"Kirovci","hub":"STN"},"cities":["BRQ","BTS","PRG","VIE"],"latestScrape":"2026-10-04","flightDateRange":["2026-08-02","2027-01-02"],"generatedAt":"2026-10-04T09:22:02","stats":{"rows":95267,"routes":8,"scrapes":48,"cheapest":{"price":14.0,"origin":"BRQ","destination":"STN","flight_date":"2026-10-21","airline":"Ryanair"}}}
