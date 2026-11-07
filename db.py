@@ -185,3 +185,19 @@ def finish_run(
         (finished_at, ryanair_rows, kiwi_rows, "\n".join(errors) or None, run_id),
     )
     conn.commit()
+
+
+def last_run_per_profile(conn: sqlite3.Connection) -> dict[str, str]:
+    """Profile id -> started_at of its latest *finished* run.
+
+    A run that crashed never gets a finished_at, so it doesn't count and the profile
+    stays due.
+    """
+    last: dict[str, str] = {}
+    for started_at, profiles in conn.execute(
+        "SELECT started_at, profiles FROM scrape_runs WHERE finished_at IS NOT NULL"
+    ):
+        for profile_id in (profiles or "").split(","):
+            if profile_id and started_at > last.get(profile_id, ""):
+                last[profile_id] = started_at
+    return last

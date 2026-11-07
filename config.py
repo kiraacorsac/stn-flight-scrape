@@ -5,7 +5,7 @@ the hub airport, the destinations, and the legs derived from them. A profile is 
 unit every other layer partitions by — rows carry their profile id, the export writes
 one folder per profile, and the dashboard has a profile dropdown at the top. Adding a
 watch-list for a different group of people therefore means adding one `Profile` below
-and nothing else.
+and nothing else — including how often it is scraped, which is the profile's `schedule`.
 
 The rolling-window size, HTTP politeness and storage settings are global: they apply
 to every profile.
@@ -13,11 +13,39 @@ to every profile.
 
 from __future__ import annotations
 
+import datetime as dt
 import os
 from dataclasses import dataclass
 from pathlib import Path
 
 # --- Profiles ---------------------------------------------------------------
+
+
+@dataclass(frozen=True, slots=True)
+class Schedule:
+    """When a profile is scraped, in the scraping machine's local time.
+
+    Daily at `hour`, or weekly on `weekday` (0 = Monday ... 6 = Sunday) at `hour`.
+    The systemd timer ticks hourly and scrapes whichever profiles are due — see
+    `last_due` and `scrape.py --list-due`.
+    """
+
+    hour: int
+    weekday: int | None = None   # None = every day
+
+    def last_due(self, now: dt.datetime) -> dt.datetime:
+        """The most recent scheduled moment at or before `now`."""
+        slot = now.replace(hour=self.hour, minute=0, second=0, microsecond=0)
+        period = dt.timedelta(days=1 if self.weekday is None else 7)
+        if self.weekday is not None:
+            slot -= dt.timedelta(days=(slot.weekday() - self.weekday) % 7)
+        if slot > now:
+            slot -= period
+        return slot
+
+
+DAILY_5AM = Schedule(hour=5)
+SUNDAY = 6
 
 
 @dataclass(frozen=True, slots=True)
@@ -29,6 +57,7 @@ class Profile:
     hub: str                     # IATA of the fixed hub; every leg starts or ends here
     destinations: tuple[str, ...]
     airport_names: dict[str, str]  # IATA -> human name, for nicer logging / reports
+    schedule: Schedule = DAILY_5AM
 
     def legs(self) -> list[tuple[str, str]]:
         """Return every (origin, destination) leg: hub->dest and dest->hub."""
@@ -52,6 +81,7 @@ PROFILES: dict[str, Profile] = {
             "PRG": "Prague",
             "VIE": "Vienna",
         },
+        schedule=DAILY_5AM,
     ),
     "giulia": Profile(
         id="giulia",
@@ -63,6 +93,7 @@ PROFILES: dict[str, Profile] = {
             "BDS": "Brindisi",
             "BRI": "Bari",
         },
+        schedule=Schedule(weekday=SUNDAY, hour=1),
     ),
     "aleix": Profile(
         id="aleix",
@@ -75,6 +106,7 @@ PROFILES: dict[str, Profile] = {
             "GRO": "Girona (Barcelona)",
             "REU": "Reus (Barcelona)",
         },
+        schedule=Schedule(weekday=SUNDAY, hour=3),
     ),
 }
 

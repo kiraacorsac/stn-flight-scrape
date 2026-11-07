@@ -1,4 +1,5 @@
-# User unit: scrape + publish once. Started daily by flights-scraper.timer.
+# User unit: scrape whichever profiles are due, then publish. Started hourly by
+# flights-scraper.timer.
 # Assumes the repo is cloned at ~/stn-flight-scrape. Output is appended to
 # logs/scrape.log (the Pi's journal is RAM-only, so it wouldn't survive a reboot).
 [Unit]
@@ -14,6 +15,7 @@ ExecStart=%h/stn-flight-scrape/scripts/run_and_deploy.sh
 Environment=PYTHONUNBUFFERED=1
 StandardOutput=append:%h/stn-flight-scrape/logs/scrape.log
 StandardError=inherit
-# A full run is ~20 minutes of polite request delays; give a slow Pi plenty of slack.
+# A run of every profile is ~30 minutes of polite request delays; give a slow Pi
+# plenty of slack.
 TimeoutStartSec=2h
 Nice=10

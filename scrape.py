@@ -1,7 +1,9 @@
 """Entry point: scrape all legs from all sources and append to the database.
 
-Run daily (see systemd/flights-scraper.timer, or scripts/setup_task.ps1 on Windows). Each run stamps every observation with a
-single consistent scrape timestamp and the profile it was scraped for, and appends
+Run on each profile's schedule (see systemd/flights-scraper.timer and --list-due, or
+scripts/setup_task.ps1 on Windows, which runs every profile daily). Each run stamps
+every observation with a single consistent scrape timestamp and the profile it was
+scraped for, and appends
 to flights.db without overwriting prior scrapes, so prices accumulate into a time
 series per profile.
 
@@ -14,6 +16,7 @@ Examples:
     python scrape.py --profile kirovci    # one profile only
     python scrape.py --source ryanair     # one source only
     python scrape.py --routes STN-PRG,PRG-STN
+    python scrape.py --list-due           # print the profiles whose schedule is due
 """
 
 from __future__ import annotations
@@ -69,6 +72,10 @@ def parse_args() -> argparse.Namespace:
         "--dry-run", action="store_true",
         help="Fetch and print results but do not write to the database.",
     )
+    p.add_argument(
+        "--list-due", action="store_true",
+        help="Print the comma-separated profiles due per their schedule, and exit.",
+    )
     return p.parse_args()
 
 
@@ -76,6 +83,21 @@ def selected_profiles(profile_arg: str) -> list[Profile]:
     if profile_arg.strip().lower() == "all":
         return list(PROFILES.values())
     return [get_profile(token.strip()) for token in profile_arg.split(",") if token.strip()]
+
+
+def due_profiles(now: dt.datetime) -> list[Profile]:
+    """Profiles whose latest scheduled moment has passed since their last finished run."""
+    if not DB_PATH.exists():
+        return list(PROFILES.values())
+    from db import connect, last_run_per_profile
+
+    conn = connect(DB_PATH)
+    last = last_run_per_profile(conn)
+    conn.close()
+    return [
+        p for p in PROFILES.values()
+        if last.get(p.id, "") < p.schedule.last_due(now).isoformat(timespec="seconds")
+    ]
 
 
 def leg_plan(profiles: list[Profile], routes_arg: str) -> dict[tuple[str, str], list[Profile]]:
@@ -117,6 +139,10 @@ def main() -> None:
     args = parse_args()
 
     now = dt.datetime.now()
+    if args.list_due:
+        print(",".join(p.id for p in due_profiles(now)))
+        return
+
     today = now.date()
     scrape_date = today.isoformat()
     scrape_time = now.strftime("%H:%M:%S")

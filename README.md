@@ -6,14 +6,14 @@ as a time series, so you can watch prices evolve as departure approaches.
 What gets tracked is defined by a **profile**. Three exist today, all hubbed on **London
 Stansted (STN)** and both directions:
 
-| profile | destinations |
-|---|---|
-| **Kirovci** | Brno (BRQ), Bratislava (BTS), Prague (PRG), Vienna (VIE) |
-| **Giulia** | Brindisi (BDS), Bari (BRI) |
-| **Aleix** | Barcelona El Prat (BCN), Girona (GRO), Reus (REU) |
+| profile | destinations | scraped |
+|---|---|---|
+| **Kirovci** | Brno (BRQ), Bratislava (BTS), Prague (PRG), Vienna (VIE) | daily, 05:00 |
+| **Giulia** | Brindisi (BDS), Bari (BRI) | weekly, Sunday 01:00 |
+| **Aleix** | Barcelona El Prat (BCN), Girona (GRO), Reus (REU) | weekly, Sunday 03:00 |
 
 - Every run scrapes all flight dates in a **rolling 0–90 day window**, so each flight is
-  re-sampled daily as it gets closer.
+  re-sampled on every scrape as it gets closer.
 - The database is **append-only**: new scrapes are saved *alongside* old ones, never
   overwriting them.
 - Direct flights only.
@@ -33,16 +33,19 @@ PROFILES = {
         id="kirovci", name="Kirovci", hub="STN",
         destinations=("BRQ", "BTS", "PRG", "VIE"),
         airport_names={...},
+        schedule=DAILY_5AM,
     ),
     "giulia": Profile(
         id="giulia", name="Giulia", hub="STN",
         destinations=("BDS", "BRI"),
         airport_names={...},
+        schedule=Schedule(weekday=SUNDAY, hour=1),
     ),
     "aleix": Profile(
         id="aleix", name="Aleix", hub="STN",
         destinations=("BCN", "GRO", "REU"),
         airport_names={...},
+        schedule=Schedule(weekday=SUNDAY, hour=3),
     ),
 }
 ```
@@ -80,15 +83,23 @@ A full run makes ~800 requests per distinct leg set (Ryanair is queried per day)
 takes roughly 15–20 minutes at the default 1-second delay. Lower `--delay` to go faster
 at the cost of being less gentle on the providers.
 
-## Scheduling (daily, automatic)
+## Scheduling (automatic)
+
+Each profile carries its own `schedule` in `config.py`: daily (`Schedule(hour=5)`) or
+weekly (`Schedule(weekday=SUNDAY, hour=1)`, weekdays 0 = Monday … 6 = Sunday), in the
+scraping machine's local time. A profile is **due** when its latest scheduled moment has
+passed since its last *finished* run; `python scrape.py --list-due` prints the ones that
+are. A new profile has no runs yet, so it is due straight away.
 
 ### Raspberry Pi / Linux (systemd)
 
-The scraper runs daily on a Raspberry Pi (`holly`, a 1B+ on Raspberry Pi OS trixie) as a
-systemd **user** timer: `systemd/flights-scraper.timer` fires at 05:00 (catching up on
-the next boot if the Pi was off) and starts `systemd/flights-scraper.service`, which runs
-`scripts/run_and_deploy.sh` (scrape, export, push to `gh-pages`). Output is appended
-to `logs/scrape.log`. A full run takes about 25 minutes on the 1B+.
+The scraper runs on a Raspberry Pi (`holly`, a 1B+ on Raspberry Pi OS trixie) as a
+systemd **user** timer: `systemd/flights-scraper.timer` ticks hourly and starts
+`systemd/flights-scraper.service`, which runs `scripts/run_and_deploy.sh`. That scrapes
+only the profiles that are due, then exports and pushes to `gh-pages`; a tick with
+nothing due exits without deploying or logging. A slot missed while the Pi was off is
+picked up by the first tick after it. Output is appended to `logs/scrape.log`. Kirovci
+takes about 25 minutes on the 1B+.
 
 One-time setup, with the repo cloned at `~/stn-flight-scrape`:
 
@@ -101,14 +112,16 @@ systemctl --user daemon-reload
 systemctl --user enable --now flights-scraper.timer
 ```
 
-Run on demand with `systemctl --user start flights-scraper`; check with
+Run whatever is due now with `systemctl --user start flights-scraper`, or scrape every
+profile regardless of schedule with `scripts/run_and_deploy.sh --all`; check with
 `systemctl --user list-timers` and `tail logs/scrape.log`. Pushing to `gh-pages` needs
 non-interactive auth. On the Pi this is an SSH deploy key with write access, with `origin`
 set to `git@github.com:kiraacorsac/stn-flight-scrape.git`.
 
 ### Windows (Scheduled Task)
 
-Register a Windows Scheduled Task that runs the scraper every morning:
+Register a Windows Scheduled Task that runs the scraper every morning. This path ignores
+the per-profile schedules and scrapes every profile daily:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\setup_task.ps1
@@ -161,7 +174,7 @@ has two charts:
    90-day window, Ryanair vs Kiwi.
 2. **Price history for one departure date** — how a chosen flight's fare moves across
    successive scrapes. It shows a single point after the first scrape and fills into a
-   curve as the daily task accumulates more scrape dates.
+   curve as the scheduled runs accumulate more scrape dates.
 
 ### Finding trips
 

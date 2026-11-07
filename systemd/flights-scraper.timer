@@ -1,11 +1,11 @@
 [Unit]
-Description=Daily flight price scrape
+Description=Hourly check for flight price scrapes that are due
 
 [Timer]
-OnCalendar=*-*-* 05:00
-# Run on the next boot if the Pi was off at 05:00.
-Persistent=true
-RandomizedDelaySec=10min
+# Each profile's own schedule (config.Schedule) decides what a tick scrapes; most
+# ticks find nothing due and exit at once. A missed slot (Pi off) is picked up by
+# the first tick after it, so no Persistent= catch-up is needed.
+OnCalendar=hourly
 
 [Install]
 WantedBy=timers.target
