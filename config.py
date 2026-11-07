@@ -64,6 +64,18 @@ PROFILES: dict[str, Profile] = {
             "BRI": "Bari",
         },
     ),
+    "aleix": Profile(
+        id="aleix",
+        name="Aleix",
+        hub="STN",
+        destinations=("BCN", "GRO", "REU"),
+        airport_names={
+            "STN": "London Stansted",
+            "BCN": "Barcelona El Prat",
+            "GRO": "Girona (Barcelona)",
+            "REU": "Reus (Barcelona)",
+        },
+    ),
 }
 
 # The profile the dashboard opens on and the one legacy rows were backfilled with.
