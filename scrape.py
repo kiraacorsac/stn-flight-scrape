@@ -1,6 +1,6 @@
 """Entry point: scrape all legs from all sources and append to the database.
 
-Run daily (see scripts/setup_task.ps1). Each run stamps every observation with a
+Run daily (see systemd/flights-scraper.timer, or scripts/setup_task.ps1 on Windows). Each run stamps every observation with a
 single consistent scrape timestamp and the profile it was scraped for, and appends
 to flights.db without overwriting prior scrapes, so prices accumulate into a time
 series per profile.

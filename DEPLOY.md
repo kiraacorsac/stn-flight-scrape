@@ -71,6 +71,14 @@ history of the growing database.
 > The push needs non-interactive git auth. `gh auth login` (or Git Credential Manager with
 > saved credentials) covers this so the scheduled task can push without prompting.
 
+### On a Raspberry Pi / Linux
+
+`scripts/run_and_deploy.sh` and `scripts/deploy_pages.sh` are the bash equivalents
+(`--no-db` and `--repo-url URL` mirror `-NoDb` / `-RepoUrl`), driven by the systemd timer
+described in the README's *Scheduling* section. Only one machine should scrape and deploy:
+each deploy force-pushes that machine's `flights.db`, so two scrapers would overwrite
+each other's history.
+
 ## The public database
 
 `deploy_pages.ps1` also publishes the raw SQLite file for download at

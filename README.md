@@ -76,6 +76,32 @@ at the cost of being less gentle on the providers.
 
 ## Scheduling (daily, automatic)
 
+### Raspberry Pi / Linux (systemd)
+
+The scraper runs daily on a Raspberry Pi (`holly`, a 1B+ on Raspberry Pi OS trixie) as a
+systemd **user** timer: `systemd/flights-scraper.timer` fires at 05:00 (catching up on
+the next boot if the Pi was off) and starts `systemd/flights-scraper.service`, which runs
+`scripts/run_and_deploy.sh` (scrape, export, push to `gh-pages`). Output is appended
+to `logs/scrape.log`. A full run takes about 25 minutes on the 1B+.
+
+One-time setup, with the repo cloned at `~/stn-flight-scrape`:
+
+```bash
+sudo apt install git python3-httpx sqlite3       # apt's httpx avoids pip on ARMv6
+mkdir -p ~/stn-flight-scrape/logs ~/.config/systemd/user
+ln -sf ~/stn-flight-scrape/systemd/flights-scraper.* ~/.config/systemd/user/
+sudo loginctl enable-linger "$USER"              # run timers without a login session
+systemctl --user daemon-reload
+systemctl --user enable --now flights-scraper.timer
+```
+
+Run on demand with `systemctl --user start flights-scraper`; check with
+`systemctl --user list-timers` and `tail logs/scrape.log`. Pushing to `gh-pages` needs
+non-interactive auth. On the Pi this is an SSH deploy key with write access, with `origin`
+set to `git@github.com:kiraacorsac/stn-flight-scrape.git`.
+
+### Windows (Scheduled Task)
+
 Register a Windows Scheduled Task that runs the scraper every morning:
 
 ```powershell
